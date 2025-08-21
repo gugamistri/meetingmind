@@ -1,14 +1,83 @@
 //! Transcription and speech-to-text processing
+//!
+//! This module provides the core transcription pipeline for MeetingMind,
+//! supporting both local Whisper models via ONNX Runtime and cloud API fallback.
 
-// TODO: Implement transcription modules
-// This is a placeholder for the transcription domain
+pub mod models;
+pub mod pipeline;
+pub mod types;
+pub mod whisper;
 
-/// Transcription service placeholder
-pub struct TranscriptionService;
+#[cfg(feature = "cloud-apis")]
+pub mod cloud;
+
+#[cfg(test)]
+mod tests;
+
+// Re-export key types and services
+pub use models::ModelManager;
+pub use pipeline::TranscriptionPipeline;
+pub use types::*;
+pub use whisper::WhisperProcessor;
+
+#[cfg(feature = "cloud-apis")]
+pub use cloud::CloudProcessor;
+
+use crate::error::Result;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+/// Main transcription service coordinating all transcription operations
+pub struct TranscriptionService {
+    pipeline: Arc<RwLock<TranscriptionPipeline>>,
+    model_manager: Arc<ModelManager>,
+}
 
 impl TranscriptionService {
     /// Create a new transcription service
-    pub fn new() -> Self {
-        Self
+    pub async fn new() -> Result<Self> {
+        let model_manager = Arc::new(ModelManager::new().await?);
+        let pipeline = Arc::new(RwLock::new(
+            TranscriptionPipeline::new(model_manager.clone()).await?
+        ));
+        
+        Ok(Self {
+            pipeline,
+            model_manager,
+        })
+    }
+    
+    /// Start transcription processing for a meeting session
+    pub async fn start_session(&self, session_id: &str) -> Result<()> {
+        let mut pipeline = self.pipeline.write().await;
+        pipeline.start_session(session_id).await
+    }
+    
+    /// Stop transcription processing
+    pub async fn stop_session(&self) -> Result<()> {
+        let mut pipeline = self.pipeline.write().await;
+        pipeline.stop_session().await
+    }
+    
+    /// Process audio chunk and return transcription
+    pub async fn process_audio_chunk(
+        &self,
+        audio_data: &[f32],
+        sample_rate: u32,
+    ) -> Result<Vec<TranscriptionChunk>> {
+        let pipeline = self.pipeline.read().await;
+        pipeline.process_audio_chunk(audio_data, sample_rate).await
+    }
+    
+    /// Get transcription confidence threshold
+    pub async fn get_confidence_threshold(&self) -> f32 {
+        let pipeline = self.pipeline.read().await;
+        pipeline.get_confidence_threshold()
+    }
+    
+    /// Update transcription configuration
+    pub async fn update_config(&self, config: TranscriptionConfig) -> Result<()> {
+        let mut pipeline = self.pipeline.write().await;
+        pipeline.update_config(config).await
     }
 }

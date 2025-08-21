@@ -116,5 +116,17 @@ impl From<sqlx::Error> for AppError {
     }
 }
 
+/// Convert from transcription::TranscriptionError
+impl From<crate::transcription::types::TranscriptionError> for AppError {
+    fn from(err: crate::transcription::types::TranscriptionError) -> Self {
+        Self::Transcription {
+            message: err.to_string(),
+        }
+    }
+}
+
 /// Result type alias for convenience
 pub type AppResult<T> = Result<T, AppError>;
+
+/// Result type alias using AppError (backwards compatibility)
+pub type Result<T> = AppResult<T>;
