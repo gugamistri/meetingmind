@@ -1,0 +1,36 @@
+[workspace]
+members = ["src-tauri"]
+resolver = "2"
+
+[workspace.dependencies]
+# Core runtime and async
+tokio = { version = "1.40", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Database and storage
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid"] }
+
+# Audio processing
+cpal = "0.15"
+
+# ML/AI inference - temporarily disabled for macOS ARM64 compatibility
+# onnxruntime = "0.0.14"
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Utilities
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Security
+chacha20poly1305 = "0.10"
+argon2 = "0.5"
+rand = "0.8"
