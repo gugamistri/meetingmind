@@ -1,0 +1,43 @@
+[package]
+name = "meeting-mind"
+version = "0.1.0"
+description = "Privacy-first AI Meeting Assistant for desktop"
+authors = ["MeetingMind Team"]
+license = "MIT"
+repository = "https://github.com/meetingmind/meeting-mind"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[build-dependencies]
+tauri-build = { version = "2.4", features = [] }
+
+[dependencies]
+# Tauri framework
+tauri = { version = "2.4", features = [] }
+tauri-plugin-shell = "2.3"
+
+# Workspace dependencies  
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+cpal = { workspace = true }
+# onnxruntime = { workspace = true }  # Temporarily disabled for macOS ARM64
+reqwest = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+chacha20poly1305 = { workspace = true }
+argon2 = { workspace = true }
+rand = { workspace = true }
+
+[features]
+# This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!
+default = ["custom-protocol"]
+# This feature is used for production builds where `devPath` points to the filesystem
+# DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]
