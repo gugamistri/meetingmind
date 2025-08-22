@@ -1,14 +1,22 @@
-//! AI-powered features (summarization, insights)
+//! AI-powered features (summarization, insights, cost tracking)
 
-// TODO: Implement AI modules
-// This is a placeholder for the AI domain
+pub mod types;
+pub mod client;
+pub mod openai;
+pub mod claude;
+pub mod manager;
+pub mod cost_tracking;
+pub mod templates;
+pub mod summarization;
 
-/// AI service placeholder
-pub struct AIService;
+pub use types::*;
+pub use client::AIServiceClient;
+pub use openai::OpenAIClient;
+pub use claude::ClaudeClient;
+pub use manager::{AIServiceManager, UsageStats, ServiceHealth};
+pub use cost_tracking::{CostTracker, CostEstimation, BudgetImpact, ProviderStats, WarningLevel, ExportFormat};
+pub use templates::{TemplateManager, TemplateContext, TemplatePreview, ImportResult, TemplateTestResult};
+pub use summarization::{SummarizationService, SummarizationStats, SummaryOptions};
 
-impl AIService {
-    /// Create a new AI service
-    pub fn new() -> Self {
-        Self
-    }
-}
+#[cfg(test)]
+mod tests;
