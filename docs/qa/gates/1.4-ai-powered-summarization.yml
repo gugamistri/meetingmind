@@ -1,0 +1,70 @@
+# Quality Gate Decision for Story 1.4: AI-Powered Summarization
+schema: 1
+story: "1.4"
+story_title: "AI-Powered Summarization"
+gate: CONCERNS
+status_reason: "Excellent architectural implementation with comprehensive AI integration, but critical test coverage gaps prevent production readiness for cost-sensitive AI features."
+reviewer: "Quinn (Test Architect)"
+updated: "2025-08-22T00:00:00Z"
+
+# Issues requiring attention before production
+top_issues:
+  - id: "TEST-001"
+    severity: high
+    finding: "Zero test coverage for critical AI frontend components (CostTracker, SummaryView, SummaryGeneration)"
+    suggested_action: "Add comprehensive React component tests with Vitest and Testing Library"
+  - id: "TEST-002"  
+    severity: high
+    finding: "No integration tests for OpenAI/Claude client implementations or fallback logic"
+    suggested_action: "Implement AI service integration tests with mock providers and failure scenarios"
+  - id: "TEST-003"
+    severity: high
+    finding: "Cost tracking accuracy unvalidated - critical for user trust and billing transparency"
+    suggested_action: "Create cost calculation validation tests with various token usage scenarios"
+  - id: "PERF-001"
+    severity: medium
+    finding: "30-second performance requirement unvalidated through testing"
+    suggested_action: "Add performance validation tests for summary generation latency"
+
+waiver: { active: false }
+
+# Quality assessment details
+quality_score: 70  # Reduced from mid-dev 90/100 due to test coverage analysis
+expires: "2025-09-05T00:00:00Z"  # 2 weeks for test implementation
+
+evidence:
+  tests_reviewed: 3  # Only basic type serialization tests found
+  risks_identified: 4
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8]  # All ACs functionally implemented
+    ac_gaps: []  # No functional gaps, only test validation gaps
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: "Excellent security with secrecy crate for API keys, no credential exposure"
+  performance:
+    status: CONCERNS  
+    notes: "Architecture supports 30-second requirement but lacks validation testing"
+  reliability:
+    status: CONCERNS
+    notes: "Circuit breaker pattern implemented but fallback logic untested"
+  maintainability:
+    status: PASS
+    notes: "Professional architecture with clear separation of concerns"
+
+recommendations:
+  immediate:  # Must fix before production
+    - action: "Add comprehensive frontend tests for AI components"
+      refs: ["src/components/ai/CostTracker/", "src/components/ai/SummaryView/", "src/components/ai/SummaryGeneration/"]
+    - action: "Implement AI service integration tests with mocked providers"
+      refs: ["src-tauri/src/ai/openai.rs", "src-tauri/src/ai/claude.rs", "src-tauri/src/ai/manager.rs"]
+    - action: "Create cost tracking accuracy validation tests"
+      refs: ["src-tauri/src/ai/cost_tracking.rs"]
+    - action: "Add performance validation for 30-second requirement"
+      refs: ["src-tauri/src/ai/summarization.rs"]
+  future:  # Can be addressed later
+    - action: "Add end-to-end workflow testing from transcription to summary"
+      refs: ["tests/integration/"]
+    - action: "Implement load testing for concurrent AI operations"
+      refs: ["src-tauri/src/ai/manager.rs"]

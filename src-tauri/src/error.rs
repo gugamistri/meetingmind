@@ -29,6 +29,77 @@ pub enum AppError {
 
     #[error("Internal error: {message}")]
     Internal { message: String },
+
+    #[error("AI service error: {message}")]
+    AI { message: String },
+}
+
+/// Comprehensive error type for better error handling
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("Configuration error: {message}")]
+    Configuration {
+        message: String,
+        #[source]
+        source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    },
+
+    #[error("Database error: {message}")]
+    Database {
+        message: String,
+        #[source]
+        source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    },
+
+    #[error("Audio error: {message}")]
+    Audio {
+        message: String,
+        #[source]
+        source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    },
+
+    #[error("Transcription error: {message}")]
+    Transcription {
+        message: String,
+        #[source]
+        source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    },
+
+    #[error("AI service error [{provider}]: {message}")]
+    AIService {
+        provider: String,
+        message: String,
+        #[source]
+        source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    },
+
+    #[error("Budget exceeded for {budget_type}: ${current:.2} >= ${limit:.2}")]
+    BudgetExceeded {
+        budget_type: String,
+        limit: f64,
+        current: f64,
+    },
+
+    #[error("HTTP error: {message}")]
+    Http {
+        message: String,
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+
+    #[error("IO error: {message}")]
+    Io {
+        message: String,
+        #[source]
+        source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    },
+
+    #[error("Internal error: {message}")]
+    Internal {
+        message: String,
+        #[source]
+        source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    },
 }
 
 impl AppError {
@@ -125,8 +196,30 @@ impl From<crate::transcription::types::TranscriptionError> for AppError {
     }
 }
 
+/// Convert from Error to AppError for Tauri commands
+impl From<Error> for AppError {
+    fn from(err: Error) -> Self {
+        match err {
+            Error::Configuration { message, .. } => Self::Config { message },
+            Error::Database { message, .. } => Self::Database { message },
+            Error::Audio { message, .. } => Self::Audio { message },
+            Error::Transcription { message, .. } => Self::Transcription { message },
+            Error::AIService { message, .. } => Self::AI { message },
+            Error::BudgetExceeded { budget_type, limit, current } => Self::AI { 
+                message: format!("Budget exceeded for {}: ${:.2} >= ${:.2}", budget_type, current, limit)
+            },
+            Error::Http { message, .. } => Self::Integration { message },
+            Error::Io { message, .. } => Self::Io { message },
+            Error::Internal { message, .. } => Self::Internal { message },
+        }
+    }
+}
+
 /// Result type alias for convenience
 pub type AppResult<T> = std::result::Result<T, AppError>;
 
-/// Result type alias using AppError (backwards compatibility)
-pub type Result<T> = std::result::Result<T, AppError>;
+/// Result type alias using comprehensive Error type
+pub type Result<T> = std::result::Result<T, Error>;
+
+/// Legacy result type alias using AppError (backwards compatibility)
+pub type LegacyResult<T> = std::result::Result<T, AppError>;
