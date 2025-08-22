@@ -249,7 +249,10 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
   const renderWaveformVisualizer = () => {
     const barWidth = 3;
     const barSpacing = 1;
-    const maxBars = Math.floor(config.width.replace('w-', '').replace(/\d+/, (match) => String(parseInt(match) * 16 / 4))) / (barWidth + barSpacing);
+    // Map size to approximate pixel width for bar calculation
+    const widthMapping = { sm: 128, md: 192, lg: 256 };
+    const approximateWidth = widthMapping[size];
+    const maxBars = Math.floor(approximateWidth / (barWidth + barSpacing));
     const visibleHistory = levelHistory.slice(-maxBars);
     
     return (

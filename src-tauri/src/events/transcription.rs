@@ -2,7 +2,7 @@
 
 use crate::transcription::types::{TranscriptionChunk, SessionId};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter};
 use tracing::{debug, error};
 use uuid::Uuid;
 
@@ -193,7 +193,7 @@ impl TranscriptionEventEmitter {
 
     /// Generic event emission
     fn emit_event(&self, event_name: &str, event_data: &TranscriptionEvent) {
-        if let Err(e) = self.app_handle.emit_all(event_name, event_data) {
+        if let Err(e) = self.app_handle.emit(event_name, event_data) {
             error!("Failed to emit transcription event '{}': {}", event_name, e);
         }
     }
@@ -206,7 +206,7 @@ impl TranscriptionEventEmitter {
             "service": "transcription"
         });
 
-        if let Err(e) = self.app_handle.emit_all("transcription-heartbeat", heartbeat_data) {
+        if let Err(e) = self.app_handle.emit("transcription-heartbeat", heartbeat_data) {
             error!("Failed to emit transcription heartbeat: {}", e);
         }
     }
@@ -229,7 +229,7 @@ impl TranscriptionEventEmitter {
             "count": chunk_data.len()
         });
 
-        if let Err(e) = self.app_handle.emit_all("transcription-chunk-batch", batch_event) {
+        if let Err(e) = self.app_handle.emit("transcription-chunk-batch", batch_event) {
             error!("Failed to emit transcription batch: {}", e);
         } else {
             debug!("Emitted batch of {} transcription chunks for session: {}", chunk_data.len(), session_id);

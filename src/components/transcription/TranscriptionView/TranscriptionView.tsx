@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from '@tauri-apps/api/core';
 import { TranscriptionChunk } from '../RealTimeTranscription/RealTimeTranscription';
 import { LoadingSpinner } from '../../common/LoadingSpinner';
 import clsx from 'clsx';
@@ -33,7 +33,7 @@ interface SearchFilters {
 export const TranscriptionView: React.FC<TranscriptionViewProps> = ({
   sessionId,
   meetingId,
-  readOnly = false,
+  readOnly: _readOnly = false,
   showSearch = true,
   showExport = true,
   className,
@@ -49,7 +49,6 @@ export const TranscriptionView: React.FC<TranscriptionViewProps> = ({
     confidence_min: 0.0,
     language: 'all',
     model: 'all',
-    processed_locally: undefined,
   });
   const [selectedChunk, setSelectedChunk] = useState<TranscriptionChunk | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'continuous'>('list');
@@ -98,7 +97,7 @@ export const TranscriptionView: React.FC<TranscriptionViewProps> = ({
     setError(null);
 
     try {
-      const results = await invoke('search_transcriptions', {
+      const results = await invoke<any[]>('search_transcriptions', {
         query: searchFilters.query,
         filters: {
           confidence_min: searchFilters.confidence_min > 0 ? searchFilters.confidence_min : undefined,
@@ -137,7 +136,7 @@ export const TranscriptionView: React.FC<TranscriptionViewProps> = ({
   // Export transcriptions
   const exportTranscriptions = async (format: 'text' | 'json' | 'csv') => {
     try {
-      const exportData = await invoke('export_transcriptions', {
+      const exportData = await invoke<string>('export_transcriptions', {
         sessionId: sessionId || undefined,
         meetingId: meetingId || undefined,
         format,
@@ -372,11 +371,15 @@ export const TranscriptionView: React.FC<TranscriptionViewProps> = ({
                 <select
                   value={searchFilters.processed_locally === undefined ? 'all' : 
                          searchFilters.processed_locally ? 'local' : 'cloud'}
-                  onChange={(e) => setSearchFilters(prev => ({
-                    ...prev,
-                    processed_locally: e.target.value === 'all' ? undefined :
-                                     e.target.value === 'local'
-                  }))}
+                  onChange={(e) => setSearchFilters(prev => {
+                    const newFilters = { ...prev };
+                    if (e.target.value === 'all') {
+                      delete newFilters.processed_locally;
+                    } else {
+                      newFilters.processed_locally = e.target.value === 'local';
+                    }
+                    return newFilters;
+                  })}
                   className="w-full text-xs border border-gray-300 rounded px-2 py-1"
                 >
                   <option value="all">All</option>

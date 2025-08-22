@@ -7,7 +7,6 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAudioStatus, useAudioStats, useAudioStore } from '../../../stores/audio.store';
-import { AudioCaptureStatus } from '../../../types/audio.types';
 import clsx from 'clsx';
 
 export interface RecordingStatusProps {
@@ -49,6 +48,7 @@ export const RecordingStatus: React.FC<RecordingStatusProps> = ({
     } else {
       setStartTime(null);
       setRecordingTime(0);
+      return undefined;
     }
   }, [isRecording, startTime]);
 

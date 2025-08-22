@@ -5,7 +5,7 @@
 
 use crate::transcription::models::ModelManager;
 use crate::transcription::types::{
-    ProcessingMode, Result, SessionId, TranscriptionChunk, TranscriptionConfig, TranscriptionError,
+    Result, SessionId, TranscriptionChunk, TranscriptionConfig, TranscriptionError,
     TranscriptionResult,
 };
 use crate::transcription::whisper::WhisperProcessor;
@@ -456,10 +456,8 @@ impl TranscriptionPipeline {
     }
 
     /// Get confidence threshold
-    pub fn get_confidence_threshold(&self) -> f32 {
-        // This should return the current confidence threshold
-        // For now, return the default
-        0.7
+    pub async fn get_confidence_threshold(&self) -> f32 {
+        self.whisper_processor.get_confidence_threshold().await
     }
 
     /// Update configuration
@@ -470,7 +468,7 @@ impl TranscriptionPipeline {
         }
 
         // Update whisper processor settings
-        self.whisper_processor.set_confidence_threshold(config.confidence_threshold);
+        self.whisper_processor.set_confidence_threshold(config.confidence_threshold).await;
 
         // Switch model if needed
         self.whisper_processor.switch_model(config.model).await?;

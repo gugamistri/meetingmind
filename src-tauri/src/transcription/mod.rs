@@ -50,13 +50,13 @@ impl TranscriptionService {
     /// Start transcription processing for a meeting session
     pub async fn start_session(&self, session_id: &str) -> Result<()> {
         let mut pipeline = self.pipeline.write().await;
-        pipeline.start_session(session_id).await
+        pipeline.start_session(session_id).await.map_err(Into::into)
     }
     
     /// Stop transcription processing
     pub async fn stop_session(&self) -> Result<()> {
         let mut pipeline = self.pipeline.write().await;
-        pipeline.stop_session().await
+        pipeline.stop_session().await.map_err(Into::into)
     }
     
     /// Process audio chunk and return transcription
@@ -66,18 +66,18 @@ impl TranscriptionService {
         sample_rate: u32,
     ) -> Result<Vec<TranscriptionChunk>> {
         let pipeline = self.pipeline.read().await;
-        pipeline.process_audio_chunk(audio_data, sample_rate).await
+        pipeline.process_audio_chunk(audio_data, sample_rate).await.map_err(Into::into)
     }
     
     /// Get transcription confidence threshold
     pub async fn get_confidence_threshold(&self) -> f32 {
         let pipeline = self.pipeline.read().await;
-        pipeline.get_confidence_threshold()
+        pipeline.get_confidence_threshold().await
     }
     
     /// Update transcription configuration
     pub async fn update_config(&self, config: TranscriptionConfig) -> Result<()> {
         let mut pipeline = self.pipeline.write().await;
-        pipeline.update_config(config).await
+        pipeline.update_config(config).await.map_err(Into::into)
     }
 }

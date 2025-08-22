@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { invoke } from '@tauri-apps/api/tauri';
 import { useTranscriptionStore } from '../../../stores/transcription.store';
 import { LoadingSpinner } from '../../common/LoadingSpinner';
 import clsx from 'clsx';
@@ -46,7 +45,7 @@ export const RealTimeTranscription: React.FC<RealTimeTranscriptionProps> = ({
 }) => {
   const [chunks, setChunks] = useState<TranscriptionChunk[]>([]);
   const [isListening, setIsListening] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { isTranscribing, currentSession } = useTranscriptionStore();

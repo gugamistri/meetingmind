@@ -1,6 +1,5 @@
 //! Audio device management and enumeration
 
-use std::sync::Arc;
 use cpal::{Device, Host, traits::{DeviceTrait, HostTrait}};
 use tracing::{debug, info, warn, error};
 
@@ -208,22 +207,18 @@ impl AudioDeviceManager {
     
     /// Get supported configurations for a device
     pub fn get_supported_input_configs(&self, device: &Device) -> AudioResult<Vec<cpal::SupportedStreamConfigRange>> {
-        device.supported_input_configs()
-            .map_err(|e| AudioError::Config(e.into()))?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| AudioError::Internal { 
-                message: format!("Failed to collect supported configs: {}", e) 
-            })
+        let configs: Vec<_> = device.supported_input_configs()
+            .map_err(AudioError::SupportedConfigs)?
+            .collect();
+        Ok(configs)
     }
     
     /// Get supported configurations for an output device
     pub fn get_supported_output_configs(&self, device: &Device) -> AudioResult<Vec<cpal::SupportedStreamConfigRange>> {
-        device.supported_output_configs()
-            .map_err(|e| AudioError::Config(e.into()))?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| AudioError::Internal { 
-                message: format!("Failed to collect supported configs: {}", e) 
-            })
+        let configs: Vec<_> = device.supported_output_configs()
+            .map_err(AudioError::SupportedConfigs)?
+            .collect();
+        Ok(configs)
     }
     
     /// Find the best matching input configuration for our requirements

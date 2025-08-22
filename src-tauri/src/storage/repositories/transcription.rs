@@ -5,6 +5,7 @@ use crate::storage::database::DatabasePool;
 use crate::storage::models::{
     CreateTranscription, CreateTranscriptionSession, DbTranscription, DbTranscriptionSession,
     SearchFilters, SearchResultEnhanced, TranscriptionSessionStatus, UpdateTranscriptionSession,
+    TranscriptionMode,
 };
 use crate::transcription::types::{TranscriptionChunk, TranscriptionResult};
 use chrono::{DateTime, Utc};
@@ -31,21 +32,28 @@ impl TranscriptionRepository {
     ) -> Result<DbTranscriptionSession> {
         debug!("Creating transcription session: {}", session.session_id);
 
-        let record = sqlx::query_as!(
-            DbTranscriptionSession,
+        // Insert the session
+        sqlx::query(
             r#"
             INSERT INTO transcription_sessions 
             (session_id, meeting_id, config_language, config_model, config_mode, confidence_threshold)
             VALUES (?, ?, ?, ?, ?, ?)
-            RETURNING *
-            "#,
-            session.session_id,
-            session.meeting_id,
-            session.config_language,
-            session.config_model,
-            session.config_mode,
-            session.confidence_threshold
+            "#
         )
+        .bind(&session.session_id)
+        .bind(session.meeting_id)
+        .bind(&session.config_language)
+        .bind(&session.config_model)
+        .bind(session.config_mode as TranscriptionMode)
+        .bind(session.confidence_threshold)
+        .execute(&self.pool)
+        .await?;
+
+        // Get the inserted record
+        let record = sqlx::query_as::<_, DbTranscriptionSession>(
+            "SELECT * FROM transcription_sessions WHERE session_id = ?"
+        )
+        .bind(&session.session_id)
         .fetch_one(&self.pool)
         .await
         .map_err(|e| AppError::database(format!("Failed to create transcription session: {}", e)))?;
@@ -107,11 +115,10 @@ impl TranscriptionRepository {
     pub async fn get_session(&self, session_id: &str) -> Result<Option<DbTranscriptionSession>> {
         debug!("Getting transcription session: {}", session_id);
 
-        let record = sqlx::query_as!(
-            DbTranscriptionSession,
-            "SELECT * FROM transcription_sessions WHERE session_id = ?",
-            session_id
+        let record = sqlx::query_as::<_, DbTranscriptionSession>(
+            "SELECT * FROM transcription_sessions WHERE session_id = ?"
         )
+        .bind(session_id)
         .fetch_optional(&self.pool)
         .await
         .map_err(|e| AppError::database(format!("Failed to get transcription session: {}", e)))?;
@@ -123,28 +130,35 @@ impl TranscriptionRepository {
     pub async fn save_transcription(&self, transcription: CreateTranscription) -> Result<DbTranscription> {
         debug!("Saving transcription chunk: {}", transcription.chunk_id);
 
-        let record = sqlx::query_as!(
-            DbTranscription,
+        // Insert the transcription
+        sqlx::query(
             r#"
             INSERT INTO transcriptions 
             (chunk_id, meeting_id, session_id, content, confidence, language, model_used,
              start_timestamp, end_timestamp, word_count, processing_time_ms, processed_locally)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            RETURNING *
-            "#,
-            transcription.chunk_id,
-            transcription.meeting_id,
-            transcription.session_id,
-            transcription.content,
-            transcription.confidence,
-            transcription.language,
-            transcription.model_used,
-            transcription.start_timestamp,
-            transcription.end_timestamp,
-            transcription.word_count,
-            transcription.processing_time_ms,
-            transcription.processed_locally
+            "#
         )
+        .bind(&transcription.chunk_id)
+        .bind(transcription.meeting_id)
+        .bind(&transcription.session_id)
+        .bind(&transcription.content)
+        .bind(transcription.confidence)
+        .bind(&transcription.language)
+        .bind(&transcription.model_used)
+        .bind(transcription.start_timestamp)
+        .bind(transcription.end_timestamp)
+        .bind(transcription.word_count)
+        .bind(transcription.processing_time_ms)
+        .bind(transcription.processed_locally)
+        .execute(&self.pool)
+        .await?;
+
+        // Get the inserted record
+        let record = sqlx::query_as::<_, DbTranscription>(
+            "SELECT * FROM transcriptions WHERE chunk_id = ?"
+        )
+        .bind(&transcription.chunk_id)
         .fetch_one(&self.pool)
         .await
         .map_err(|e| AppError::database(format!("Failed to save transcription: {}", e)))?;
@@ -170,28 +184,35 @@ impl TranscriptionRepository {
         let mut saved = Vec::new();
 
         for transcription in transcriptions {
-            let record = sqlx::query_as!(
-                DbTranscription,
+            // Insert the transcription
+            sqlx::query(
                 r#"
                 INSERT INTO transcriptions 
                 (chunk_id, meeting_id, session_id, content, confidence, language, model_used,
                  start_timestamp, end_timestamp, word_count, processing_time_ms, processed_locally)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                RETURNING *
-                "#,
-                transcription.chunk_id,
-                transcription.meeting_id,
-                transcription.session_id,
-                transcription.content,
-                transcription.confidence,
-                transcription.language,
-                transcription.model_used,
-                transcription.start_timestamp,
-                transcription.end_timestamp,
-                transcription.word_count,
-                transcription.processing_time_ms,
-                transcription.processed_locally
+                "#
             )
+            .bind(&transcription.chunk_id)
+            .bind(transcription.meeting_id)
+            .bind(&transcription.session_id)
+            .bind(&transcription.content)
+            .bind(transcription.confidence)
+            .bind(&transcription.language)
+            .bind(&transcription.model_used)
+            .bind(transcription.start_timestamp)
+            .bind(transcription.end_timestamp)
+            .bind(transcription.word_count)
+            .bind(transcription.processing_time_ms)
+            .bind(transcription.processed_locally)
+            .execute(&mut *tx)
+            .await?;
+
+            // Get the inserted record
+            let record = sqlx::query_as::<_, DbTranscription>(
+                "SELECT * FROM transcriptions WHERE chunk_id = ?"
+            )
+            .bind(&transcription.chunk_id)
             .fetch_one(&mut *tx)
             .await
             .map_err(|e| AppError::database(format!("Failed to save transcription in batch: {}", e)))?;
@@ -218,18 +239,17 @@ impl TranscriptionRepository {
         let offset = offset.unwrap_or(0);
         let limit = limit.unwrap_or(100);
 
-        let records = sqlx::query_as!(
-            DbTranscription,
+        let records = sqlx::query_as::<_, DbTranscription>(
             r#"
             SELECT * FROM transcriptions 
             WHERE session_id = ? 
             ORDER BY start_timestamp ASC
             LIMIT ? OFFSET ?
-            "#,
-            session_id,
-            limit,
-            offset
+            "#
         )
+        .bind(session_id)
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&self.pool)
         .await
         .map_err(|e| AppError::database(format!("Failed to get session transcriptions: {}", e)))?;
@@ -250,18 +270,17 @@ impl TranscriptionRepository {
         let offset = offset.unwrap_or(0);
         let limit = limit.unwrap_or(100);
 
-        let records = sqlx::query_as!(
-            DbTranscription,
+        let records = sqlx::query_as::<_, DbTranscription>(
             r#"
             SELECT * FROM transcriptions 
             WHERE meeting_id = ? 
             ORDER BY start_timestamp ASC
             LIMIT ? OFFSET ?
-            "#,
-            meeting_id,
-            limit,
-            offset
+            "#
         )
+        .bind(meeting_id)
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&self.pool)
         .await
         .map_err(|e| AppError::database(format!("Failed to get meeting transcriptions: {}", e)))?;
@@ -371,28 +390,25 @@ impl TranscriptionRepository {
         }
 
         // For now, use a simplified version without dynamic filters
-        let records = sqlx::query_as!(
-            SearchResultEnhanced,
+        let records = sqlx::query_as::<_, SearchResultEnhanced>(
             r#"
             SELECT 
                 t.id, t.chunk_id, t.content, t.confidence, t.language, t.model_used,
                 t.start_timestamp, t.end_timestamp, t.word_count, t.created_at, t.session_id,
                 m.id as meeting_id, m.title as meeting_title, m.start_time as meeting_start_time,
-                ts.overall_confidence as session_confidence,
-                (t.confidence * 0.7 + 
-                 (1.0 - (julianday('now') - julianday(t.created_at)) / 30.0) * 0.3) as relevance_score
-            FROM transcriptions_fts fts
-            JOIN transcriptions t ON fts.rowid = t.id
+                COALESCE(ts.overall_confidence, 0.0) as session_confidence,
+                t.confidence as relevance_score
+            FROM transcriptions t
             JOIN meetings m ON t.meeting_id = m.id
-            JOIN transcription_sessions ts ON t.session_id = ts.session_id
-            WHERE transcriptions_fts MATCH ?
+            LEFT JOIN transcription_sessions ts ON t.session_id = ts.session_id
+            WHERE t.content LIKE ?
             ORDER BY relevance_score DESC, t.confidence DESC 
             LIMIT ? OFFSET ?
-            "#,
-            query,
-            limit,
-            offset
+            "#
         )
+        .bind(format!("%{}%", query))
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&self.pool)
         .await
         .map_err(|e| AppError::database(format!("Failed to search transcriptions: {}", e)))?;
@@ -405,11 +421,10 @@ impl TranscriptionRepository {
     pub async fn get_transcription_by_chunk_id(&self, chunk_id: &str) -> Result<Option<DbTranscription>> {
         debug!("Getting transcription by chunk ID: {}", chunk_id);
 
-        let record = sqlx::query_as!(
-            DbTranscription,
-            "SELECT * FROM transcriptions WHERE chunk_id = ?",
-            chunk_id
+        let record = sqlx::query_as::<_, DbTranscription>(
+            "SELECT * FROM transcriptions WHERE chunk_id = ?"
         )
+        .bind(chunk_id)
         .fetch_optional(&self.pool)
         .await
         .map_err(|e| AppError::database(format!("Failed to get transcription by chunk ID: {}", e)))?;
@@ -421,10 +436,10 @@ impl TranscriptionRepository {
     pub async fn delete_transcription(&self, chunk_id: &str) -> Result<bool> {
         debug!("Deleting transcription: {}", chunk_id);
 
-        let result = sqlx::query!(
-            "DELETE FROM transcriptions WHERE chunk_id = ?",
-            chunk_id
+        let result = sqlx::query(
+            "DELETE FROM transcriptions WHERE chunk_id = ?"
         )
+        .bind(chunk_id)
         .execute(&self.pool)
         .await
         .map_err(|e| AppError::database(format!("Failed to delete transcription: {}", e)))?;
@@ -443,10 +458,10 @@ impl TranscriptionRepository {
     pub async fn delete_session_transcriptions(&self, session_id: &str) -> Result<u64> {
         debug!("Deleting all transcriptions for session: {}", session_id);
 
-        let result = sqlx::query!(
-            "DELETE FROM transcriptions WHERE session_id = ?",
-            session_id
+        let result = sqlx::query(
+            "DELETE FROM transcriptions WHERE session_id = ?"
         )
+        .bind(session_id)
         .execute(&self.pool)
         .await
         .map_err(|e| AppError::database(format!("Failed to delete session transcriptions: {}", e)))?;
@@ -560,10 +575,15 @@ impl TranscriptionRepository {
     pub async fn get_session_summary(&self, session_id: &str) -> Result<Option<SessionSummary>> {
         debug!("Getting session summary: {}", session_id);
 
-        let row = sqlx::query!(
+        let row = sqlx::query(
             r#"
             SELECT 
-                ts.*,
+                ts.session_id,
+                ts.meeting_id,
+                ts.confidence_threshold,
+                ts.status,
+                ts.started_at,
+                ts.completed_at,
                 m.title as meeting_title,
                 COUNT(t.id) as chunk_count,
                 AVG(t.confidence) as avg_confidence,
@@ -573,25 +593,25 @@ impl TranscriptionRepository {
             LEFT JOIN meetings m ON ts.meeting_id = m.id
             LEFT JOIN transcriptions t ON ts.session_id = t.session_id
             WHERE ts.session_id = ?
-            GROUP BY ts.id
-            "#,
-            session_id
+            GROUP BY ts.session_id, ts.status, ts.started_at, ts.completed_at
+            "#
         )
+        .bind(session_id)
         .fetch_optional(&self.pool)
         .await
         .map_err(|e| AppError::database(format!("Failed to get session summary: {}", e)))?;
 
         if let Some(row) = row {
             let summary = SessionSummary {
-                session_id: row.session_id,
-                meeting_title: row.meeting_title.unwrap_or_default(),
-                chunk_count: row.chunk_count.unwrap_or(0),
-                avg_confidence: row.avg_confidence.unwrap_or(0.0),
-                total_duration_seconds: row.total_duration.unwrap_or(0.0),
-                total_processing_time_ms: row.total_processing_time.unwrap_or(0),
-                status: row.status,
-                started_at: row.started_at,
-                completed_at: row.completed_at,
+                session_id: row.get("session_id"),
+                meeting_title: row.get::<Option<String>, _>("meeting_title").unwrap_or_default(),
+                chunk_count: row.get::<Option<i64>, _>("chunk_count").unwrap_or(0),
+                avg_confidence: row.get::<Option<f64>, _>("avg_confidence").unwrap_or(0.0),
+                total_duration_seconds: row.get::<Option<f64>, _>("total_duration").unwrap_or(0.0),
+                total_processing_time_ms: row.get::<Option<i64>, _>("total_processing_time").unwrap_or(0),
+                status: row.get("status"),
+                started_at: row.get("started_at"),
+                completed_at: row.get("completed_at"),
             };
 
             Ok(Some(summary))

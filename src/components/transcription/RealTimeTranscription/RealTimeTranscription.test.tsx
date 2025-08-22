@@ -1,4 +1,3 @@
-import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -8,7 +7,7 @@ import { RealTimeTranscription, type TranscriptionChunk } from './RealTimeTransc
 const mockInvoke = vi.fn();
 const mockListen = vi.fn();
 
-vi.mock('@tauri-apps/api/tauri', () => ({
+vi.mock('@tauri-apps/api/core', () => ({
   invoke: mockInvoke,
 }));
 
@@ -49,7 +48,7 @@ describe('RealTimeTranscription', () => {
     vi.clearAllMocks();
     
     // Mock event listener setup
-    mockListen.mockImplementation((eventName: string, callback: Function) => {
+    mockListen.mockImplementation((_eventName: string, _callback: Function) => {
       // Return a cleanup function
       return Promise.resolve(() => {});
     });
@@ -212,32 +211,21 @@ describe('RealTimeTranscription', () => {
   });
 
   it('formats timestamps correctly', () => {
-    const chunk = createMockChunk({
-      start_time_ms: 125000, // 2 minutes 5 seconds
-    });
-    
     render(<RealTimeTranscription />);
     
-    // Simulate receiving a chunk by directly calling the component's internal method
+    // TODO: Simulate receiving a chunk by directly calling the component's internal method
     // This is more of an integration test approach
     // In practice, we might need to expose this functionality differently
   });
 
   it('shows confidence with appropriate colors', () => {
-    // This test would verify the confidence color coding
+    // TODO: This test would verify the confidence color coding
     // Based on the getConfidenceColor function logic
-    const highConfidenceChunk = createMockChunk({ confidence: 0.95 });
-    const mediumConfidenceChunk = createMockChunk({ confidence: 0.75 });
-    const lowConfidenceChunk = createMockChunk({ confidence: 0.5 });
-    
     // Test would render chunks and verify CSS classes
   });
 
   it('displays processing indicators correctly', () => {
-    const localChunk = createMockChunk({ processed_locally: true });
-    const cloudChunk = createMockChunk({ processed_locally: false });
-    
-    // Test would verify that local chunks show "Local" badge
+    // TODO: Test would verify that local chunks show "Local" badge
     // and cloud chunks show "Cloud" badge
   });
 

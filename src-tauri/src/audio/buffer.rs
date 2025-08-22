@@ -62,8 +62,9 @@ impl AudioRingBuffer {
         
         let mut written = 0;
         for &sample in samples {
-            inner.buffer[inner.write_pos] = sample;
-            inner.write_pos = (inner.write_pos + 1) % inner.capacity;
+            let write_pos = inner.write_pos;
+            inner.buffer[write_pos] = sample;
+            inner.write_pos = (write_pos + 1) % inner.capacity;
             written += 1;
         }
         
@@ -211,7 +212,8 @@ impl AudioRingBuffer {
     /// Check if the buffer has been written to recently
     pub fn has_recent_activity(&self, timeout: Duration) -> bool {
         self.inner.read()
-            .and_then(|inner| inner.last_write_time)
+            .map(|inner| inner.last_write_time)
+            .unwrap_or(None)
             .map(|last_write| last_write.elapsed() < timeout)
             .unwrap_or(false)
     }

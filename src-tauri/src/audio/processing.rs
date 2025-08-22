@@ -1,6 +1,5 @@
 //! Audio processing pipeline and quality validation
 
-use std::sync::Arc;
 use std::collections::VecDeque;
 use tracing::{debug, info, warn};
 
@@ -39,7 +38,7 @@ impl AudioProcessingPipeline {
     }
     
     /// Process an audio buffer through the pipeline
-    pub fn process(&mut self, mut buffer: AudioBuffer) -> AudioResult<AudioBuffer> {
+    pub fn process(&mut self, buffer: AudioBuffer) -> AudioResult<AudioBuffer> {
         // Update level monitor
         self.level_monitor.update(&buffer);
         
@@ -305,7 +304,7 @@ impl AudioProcessor for AutomaticGainControl {
     }
     
     fn stats(&self) -> AudioStats {
-        let mut stats = AudioStats::default();
+        let stats = AudioStats::default();
         // Could add AGC-specific statistics
         stats
     }
@@ -371,7 +370,7 @@ impl AudioAnalyzer {
         
         let mut total_samples = 0;
         let mut level_sum = 0.0;
-        let mut peak_level = 0.0;
+        let mut peak_level: f32 = 0.0;
         let mut silent_samples = 0;
         let mut clipped_samples = 0;
         

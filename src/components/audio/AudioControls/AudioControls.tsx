@@ -7,7 +7,6 @@
 
 import React, { useCallback, useEffect } from 'react';
 import { useAudioStore, useAudioStatus, useAudioError } from '../../../stores/audio.store';
-import { AudioCaptureStatus } from '../../../types/audio.types';
 import { Button } from '../../common/Button';
 import { LoadingSpinner } from '../../common/LoadingSpinner';
 import clsx from 'clsx';

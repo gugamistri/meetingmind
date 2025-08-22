@@ -90,10 +90,8 @@ export const useTranscriptionStream = (
 
   // Add new chunk
   const addChunk = useCallback((chunk: TranscriptionChunk) => {
-    // Filter by session ID if specified
-    if (sessionId && chunk.session_id !== sessionId) {
-      return;
-    }
+    // Note: Session filtering should be done at the event listener level
+    // since TranscriptionChunk doesn't contain session_id
 
     // Filter by confidence
     if (chunk.confidence < minConfidence) {

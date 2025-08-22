@@ -86,6 +86,8 @@ export const DeviceSelector: React.FC<DeviceSelectorProps> = ({
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
+
+    return undefined;
   }, [isOpen]);
 
   // Size-based styling

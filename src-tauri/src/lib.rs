@@ -30,6 +30,9 @@ pub fn run() {
         .manage(commands::transcription::TranscriptionState::default())
         .invoke_handler(tauri::generate_handler![
             greet,
+            // App commands
+            commands::get_app_info,
+            commands::health_check,
             // Transcription commands
             commands::initialize_transcription_service,
             commands::start_transcription,

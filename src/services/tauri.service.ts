@@ -5,7 +5,8 @@
  * and listening to backend events.
  */
 
-import { invoke, listen, UnlistenFn } from '@tauri-apps/api/core';
+import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import {
   AudioDevice,
   AudioCaptureStatus,
@@ -151,7 +152,7 @@ export class TauriAudioService {
    * Unsubscribe from all events
    */
   async unsubscribeFromAllEvents(): Promise<void> {
-    for (const [eventName, unlisten] of this.eventListeners) {
+    for (const [_eventName, unlisten] of this.eventListeners) {
       unlisten();
     }
     this.eventListeners.clear();

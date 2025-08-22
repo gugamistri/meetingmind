@@ -1,6 +1,5 @@
 //! Audio processing types and error definitions
 
-use std::sync::Arc;
 use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -23,8 +22,14 @@ pub enum AudioError {
     #[error("Device configuration error: {0}")]
     Config(#[from] cpal::DefaultStreamConfigError),
     
+    #[error("Supported stream configs error: {0}")]
+    SupportedConfigs(#[from] cpal::SupportedStreamConfigsError),
+    
     #[error("Stream error: {0}")]
     Stream(#[from] cpal::StreamError),
+    
+    #[error("Play stream error: {0}")]
+    PlayStream(#[from] cpal::PlayStreamError),
     
     #[error("Device enumeration error: {0}")]
     DeviceEnumeration(#[from] cpal::DevicesError),

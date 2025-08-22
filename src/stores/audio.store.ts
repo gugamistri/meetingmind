@@ -15,9 +15,9 @@ import {
   AudioLevelEvent,
   AudioRecordingState,
   DEFAULT_AUDIO_CONFIG,
-  AudioQualityLevel,
   AudioQualityInfo,
   AUDIO_LEVEL_THRESHOLDS,
+  StartCaptureRequest,
 } from '../types/audio.types';
 import { tauriAudioService, TauriServiceError } from '../services/tauri.service';
 
@@ -57,7 +57,6 @@ export const useAudioStore = create<AudioStore>()(
     isStarting: false,
     isStopping: false,
     hasError: false,
-    currentDevice: undefined,
     availableDevices: [],
     audioLevel: 0,
     peakLevel: 0,
@@ -105,7 +104,7 @@ export const useAudioStore = create<AudioStore>()(
         
         set({
           availableDevices: devices,
-          currentDevice: defaultDevice,
+          ...(defaultDevice ? { currentDevice: defaultDevice } : {}),
           config,
           isInitialized: true,
           error: null,
@@ -144,8 +143,8 @@ export const useAudioStore = create<AudioStore>()(
           recordingDuration: 0,
         });
         
-        const request = {
-          device_name: deviceName,
+        const request: StartCaptureRequest = {
+          ...(deviceName ? { device_name: deviceName } : {}),
           config: config || state.config,
         };
         
@@ -216,7 +215,9 @@ export const useAudioStore = create<AudioStore>()(
         const devices = get().availableDevices;
         const newDevice = devices.find(d => d.name === deviceName);
         
-        set({ currentDevice: newDevice });
+        if (newDevice) {
+          set({ currentDevice: newDevice });
+        }
         
         console.info(`Switched to audio device: ${deviceName}`);
       } catch (error) {
@@ -264,10 +265,12 @@ export const useAudioStore = create<AudioStore>()(
         const devices = await tauriAudioService.refreshAudioDevices();
         const currentDeviceName = get().currentDevice?.name;
         const newCurrentDevice = devices.find(d => d.name === currentDeviceName);
+        const defaultDevice = devices.find(d => d.is_default);
+        const nextDevice = newCurrentDevice || defaultDevice;
         
         set({ 
           availableDevices: devices,
-          currentDevice: newCurrentDevice || devices.find(d => d.is_default),
+          ...(nextDevice ? { currentDevice: nextDevice } : {}),
         });
         
         console.info(`Refreshed ${devices.length} audio devices`);
@@ -294,17 +297,19 @@ export const useAudioStore = create<AudioStore>()(
     setDevices: (devices: AudioDevice[]) => {
       const currentDeviceName = get().currentDevice?.name;
       const newCurrentDevice = devices.find(d => d.name === currentDeviceName);
+      const defaultDevice = devices.find(d => d.is_default);
+      const nextDevice = newCurrentDevice || defaultDevice;
       
       set({ 
         availableDevices: devices,
-        currentDevice: newCurrentDevice || devices.find(d => d.is_default),
+        ...(nextDevice ? { currentDevice: nextDevice } : {}),
       });
     },
 
     setStatus: (status: AudioCaptureStatus) => {
       const currentState = get();
       
-      const newState: Partial<AudioRecordingState> = {
+      const newState: Partial<AudioStore> = {
         isRecording: status === AudioCaptureStatus.Running,
         isStarting: status === AudioCaptureStatus.Starting,
         isStopping: status === AudioCaptureStatus.Stopping,
@@ -347,7 +352,7 @@ export const useAudioStore = create<AudioStore>()(
 
     // Computed getters
     getAudioQuality: (): AudioQualityInfo => {
-      const { audioLevel, stats } = get();
+      const { audioLevel, stats: _stats } = get();
       const dbLevel = audioLevel > 0 ? 20 * Math.log10(audioLevel) : -100;
       
       if (dbLevel >= AUDIO_LEVEL_THRESHOLDS.HIGH) {

@@ -126,7 +126,7 @@ impl From<crate::transcription::types::TranscriptionError> for AppError {
 }
 
 /// Result type alias for convenience
-pub type AppResult<T> = Result<T, AppError>;
+pub type AppResult<T> = std::result::Result<T, AppError>;
 
 /// Result type alias using AppError (backwards compatibility)
-pub type Result<T> = AppResult<T>;
+pub type Result<T> = std::result::Result<T, AppError>;

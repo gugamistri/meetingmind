@@ -39,7 +39,7 @@ impl std::fmt::Display for LanguageCode {
 }
 
 /// Whisper model types available for local processing
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum WhisperModel {
     /// Tiny model (~39MB, fastest, lowest accuracy)
     Tiny,
@@ -256,7 +256,7 @@ impl TranscriptionResult {
     pub fn full_text(&self) -> String {
         self.chunks
             .iter()
-            .map(|chunk| &chunk.text)
+            .map(|chunk| chunk.text.as_str())
             .collect::<Vec<_>>()
             .join(" ")
     }

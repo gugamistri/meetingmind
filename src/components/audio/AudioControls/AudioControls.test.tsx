@@ -2,11 +2,10 @@
  * Tests for AudioControls component
  */
 
-import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { AudioControls } from './AudioControls';
-import { useAudioStore } from '../../../stores/audio.store';
+import { useAudioStore, useAudioStatus, useAudioError } from '../../../stores/audio.store';
 
 // Mock the audio store
 vi.mock('../../../stores/audio.store', () => ({
@@ -40,8 +39,8 @@ describe('AudioControls', () => {
     
     // Setup default mocks
     (useAudioStore as any).mockReturnValue(mockAudioStore);
-    (useAudioStore as any).useAudioStatus = vi.fn(() => defaultAudioStatus);
-    (useAudioStore as any).useAudioError = vi.fn(() => null);
+    (useAudioStatus as any).mockReturnValue(defaultAudioStatus);
+    (useAudioError as any).mockReturnValue(null);
   });
 
   it('renders start recording button when not recording', () => {
@@ -53,10 +52,10 @@ describe('AudioControls', () => {
   });
 
   it('renders stop recording button when recording', () => {
-    (useAudioStore as any).useAudioStatus = vi.fn(() => ({
+    (useAudioStatus as any).mockReturnValue({
       ...defaultAudioStatus,
       isRecording: true,
-    }));
+    });
 
     render(<AudioControls />);
     

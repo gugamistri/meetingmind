@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { TranscriptionChunk } from '../components/transcription/RealTimeTranscription/RealTimeTranscription';
 
@@ -169,7 +169,7 @@ export const useTranscriptionStore = create<TranscriptionState>()(
         // Create session object
         const session: TranscriptionSession = {
           id: sessionId,
-          meetingId,
+          ...(meetingId !== undefined ? { meetingId } : {}),
           config: finalConfig,
           startTime: new Date(),
           status: 'active',
@@ -279,7 +279,7 @@ export const useTranscriptionStore = create<TranscriptionState>()(
         });
         
         // Add chunks to store
-        chunks.forEach(chunk => {
+        chunks.forEach((chunk: TranscriptionChunk) => {
           state.addChunk(chunk);
         });
         
