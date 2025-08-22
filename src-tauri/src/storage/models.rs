@@ -399,6 +399,17 @@ impl Default for SearchFilters {
     }
 }
 
+/// Meeting metadata for calendar integration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MeetingMetadata {
+    pub title: Option<String>,
+    pub participants: Option<String>,
+    pub description: Option<String>,
+    pub location: Option<String>,
+    pub meeting_url: Option<String>,
+    pub calendar_event_id: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

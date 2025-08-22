@@ -4,6 +4,7 @@
 //! from the Rust backend to the React frontend via Tauri's event system.
 
 pub mod transcription;
+pub mod calendar;
 
 // Re-export commonly used types
 pub use transcription::{
@@ -12,19 +13,24 @@ pub use transcription::{
     TranscriptionEventFilter, FilteredTranscriptionEventEmitter,
 };
 
+pub use calendar::{CalendarEventEmitter};
+
 use tauri::AppHandle;
 
 /// Central event manager for all application events
 pub struct EventManager {
     /// Transcription event emitter
     pub transcription: TranscriptionEventEmitter,
+    /// Calendar event emitter
+    pub calendar: CalendarEventEmitter,
 }
 
 impl EventManager {
     /// Create a new event manager
     pub fn new(app_handle: AppHandle) -> Self {
         Self {
-            transcription: TranscriptionEventEmitter::new(app_handle),
+            transcription: TranscriptionEventEmitter::new(app_handle.clone()),
+            calendar: CalendarEventEmitter::new(app_handle),
         }
     }
 

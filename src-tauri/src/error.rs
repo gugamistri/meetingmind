@@ -218,6 +218,81 @@ impl From<Error> for AppError {
 /// Result type alias for convenience
 pub type AppResult<T> = std::result::Result<T, AppError>;
 
+/// Convert from AppError to Error
+impl From<AppError> for Error {
+    fn from(err: AppError) -> Self {
+        match err {
+            AppError::Config { message } => Self::Configuration { 
+                message, 
+                source: None 
+            },
+            AppError::Database { message } => Self::Database { 
+                message, 
+                source: None 
+            },
+            AppError::Audio { message } => Self::Audio { 
+                message, 
+                source: None 
+            },
+            AppError::Transcription { message } => Self::Transcription { 
+                message, 
+                source: None 
+            },
+            AppError::Security { message } => Self::Internal { 
+                message: format!("Security error: {}", message), 
+                source: None 
+            },
+            AppError::Integration { message } => Self::Internal { 
+                message: format!("Integration error: {}", message), 
+                source: None 
+            },
+            AppError::Io { message } => Self::Io { 
+                message, 
+                source: None 
+            },
+            AppError::Internal { message } => Self::Internal { 
+                message, 
+                source: None 
+            },
+            AppError::AI { message } => Self::AIService { 
+                provider: "unknown".to_string(), 
+                message, 
+                source: None 
+            },
+        }
+    }
+}
+
+/// Convert from TranscriptionError to Error
+impl From<crate::transcription::types::TranscriptionError> for Error {
+    fn from(err: crate::transcription::types::TranscriptionError) -> Self {
+        Self::Transcription {
+            message: err.to_string(),
+            source: Some(Box::new(err)),
+        }
+    }
+}
+
+/// Convert from sqlx::Error to Error
+impl From<sqlx::Error> for Error {
+    fn from(err: sqlx::Error) -> Self {
+        Self::Database {
+            message: err.to_string(),
+            source: Some(Box::new(err)),
+        }
+    }
+}
+
+/// Convert from std::io::Error to Error
+impl From<std::io::Error> for Error {
+    fn from(err: std::io::Error) -> Self {
+        Self::Io {
+            message: err.to_string(),
+            source: Some(Box::new(err)),
+        }
+    }
+}
+
 /// Result type alias using comprehensive Error type
 pub type Result<T> = std::result::Result<T, Error>;
 

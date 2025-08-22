@@ -304,7 +304,7 @@ fn calculate_provider_breakdown(records: &[UsageRecord]) -> HashMap<AIProvider, 
     let mut breakdown = HashMap::new();
     
     for record in records {
-        *breakdown.entry(record.service_provider).or_insert(0.0) += record.cost_usd;
+        *breakdown.entry(record.service_provider.clone()).or_insert(0.0) += record.cost_usd;
     }
     
     breakdown

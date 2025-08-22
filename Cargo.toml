@@ -39,3 +39,8 @@ chacha20poly1305 = "0.10"
 argon2 = "0.5"
 rand = "0.8"
 secrecy = { version = "0.8", features = ["serde"] }
+
+# Calendar integration
+oauth2 = "4.4"
+url = "2.4"
+tokio-cron-scheduler = "0.9"
