@@ -43,3 +43,5 @@ default = ["custom-protocol"]
 # This feature is used for production builds where `devPath` points to the filesystem
 # DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]
+# Enable cloud API integration for transcription services
+cloud-apis = []

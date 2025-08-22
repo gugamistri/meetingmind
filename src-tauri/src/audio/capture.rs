@@ -1,23 +1,29 @@
 //! Audio capture service implementation using CPAL
 
 use std::sync::{Arc, RwLock, atomic::{AtomicBool, Ordering}};
-use std::thread;
-use std::time::{Duration, Instant};
-use cpal::{Device, Stream, StreamConfig, traits::{DeviceTrait, StreamTrait}};
+use std::time::Instant;
+use cpal::{Device, Stream, traits::{DeviceTrait, StreamTrait}};
 use tokio::sync::{mpsc, broadcast};
 use tracing::{debug, info, warn, error, instrument};
 
 use super::types::{
     AudioBuffer, AudioConfig, AudioError, AudioResult, AudioCaptureStatus, 
-    AudioProcessor, AudioLevelMonitor, AudioStats
+    AudioLevelMonitor, AudioStats
 };
+
+/// Unsafe wrapper to make Stream Send + Sync
+/// WARNING: This is potentially unsafe and should only be used in single-threaded contexts
+struct StreamWrapper(Option<Stream>);
+
+unsafe impl Send for StreamWrapper {}
+unsafe impl Sync for StreamWrapper {}
 use super::devices::AudioDeviceManager;
 use super::buffer::AudioRingBuffer;
 
 /// Audio capture service for system audio capture
 pub struct AudioCaptureService {
     device_manager: Arc<RwLock<AudioDeviceManager>>,
-    current_stream: Arc<RwLock<Option<Stream>>>,
+    current_stream: Arc<RwLock<StreamWrapper>>,
     ring_buffer: Option<AudioRingBuffer>,
     status: Arc<RwLock<AudioCaptureStatus>>,
     is_running: Arc<AtomicBool>,
@@ -47,7 +53,7 @@ impl AudioCaptureService {
         
         Ok(Self {
             device_manager,
-            current_stream: Arc::new(RwLock::new(None)),
+            current_stream: Arc::new(RwLock::new(StreamWrapper(None))),
             ring_buffer: None,
             status: Arc::new(RwLock::new(AudioCaptureStatus::Stopped)),
             is_running: Arc::new(AtomicBool::new(false)),
@@ -97,8 +103,8 @@ impl AudioCaptureService {
         
         // Start the stream
         if let Ok(stream_guard) = self.current_stream.read() {
-            if let Some(ref stream) = *stream_guard {
-                stream.play().map_err(AudioError::Stream)?;
+            if let Some(ref stream) = stream_guard.0 {
+                stream.play().map_err(AudioError::PlayStream)?;
                 info!("Audio stream started successfully");
             }
         }
@@ -127,7 +133,7 @@ impl AudioCaptureService {
         
         // Stop the stream
         if let Ok(mut stream_guard) = self.current_stream.write() {
-            if let Some(stream) = stream_guard.take() {
+            if let Some(stream) = stream_guard.0.take() {
                 drop(stream); // This stops the stream
                 info!("Audio stream stopped");
             }
@@ -207,7 +213,7 @@ impl AudioCaptureService {
         ).map_err(AudioError::Cpal)?;
         
         // Store the stream and buffer
-        *self.current_stream.write().unwrap() = Some(stream);
+        *self.current_stream.write().unwrap() = StreamWrapper(Some(stream));
         self.ring_buffer = Some(ring_buffer);
         
         // Spawn audio processing task
@@ -422,8 +428,8 @@ impl AudioCaptureService {
             self.setup_audio_stream(&device).await?;
             
             if let Ok(stream_guard) = self.current_stream.read() {
-                if let Some(ref stream) = *stream_guard {
-                    stream.play().map_err(AudioError::Stream)?;
+                if let Some(ref stream) = stream_guard.0 {
+                    stream.play().map_err(AudioError::PlayStream)?;
                     self.is_running.store(true, Ordering::Relaxed);
                     self.update_status(AudioCaptureStatus::Running).await?;
                 }
@@ -479,7 +485,7 @@ impl Drop for AudioCaptureService {
             warn!("AudioCaptureService dropped while still running, stopping capture");
             // We can't use async in Drop, so we'll just clean up synchronously
             self.is_running.store(false, Ordering::Relaxed);
-            *self.current_stream.write().unwrap() = None;
+            *self.current_stream.write().unwrap() = StreamWrapper(None);
         }
     }
 }

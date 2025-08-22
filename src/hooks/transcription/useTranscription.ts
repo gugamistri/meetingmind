@@ -67,7 +67,7 @@ export const useTranscription = (options: UseTranscriptionOptions = {}): UseTran
     config,
     error,
     statistics,
-    initializeService,
+    initializeService: _initializeService,
     startTranscription: startTranscriptionAction,
     stopTranscription: stopTranscriptionAction,
     updateConfig: updateConfigAction,

@@ -18,7 +18,7 @@ pub struct WhisperProcessor {
     model_manager: Arc<ModelManager>,
     current_model: Arc<RwLock<Option<Arc<ModelSession>>>>,
     preprocessing_params: AudioPreprocessingParams,
-    confidence_threshold: f32,
+    confidence_threshold: Arc<RwLock<f32>>,
 }
 
 impl WhisperProcessor {
@@ -30,7 +30,7 @@ impl WhisperProcessor {
             model_manager,
             current_model: Arc::new(RwLock::new(None)),
             preprocessing_params: AudioPreprocessingParams::default(),
-            confidence_threshold: 0.7,
+            confidence_threshold: Arc::new(RwLock::new(0.7)),
         })
     }
 
@@ -86,9 +86,10 @@ impl WhisperProcessor {
         let inference_result = model_session.run_inference(&preprocessed_audio).await?;
         
         let processing_time = start_processing.elapsed();
+        let confidence_threshold = *self.confidence_threshold.read().await;
         
         // Convert to transcription chunk if confidence is sufficient
-        if inference_result.confidence >= self.confidence_threshold {
+        if inference_result.confidence >= confidence_threshold {
             let chunk = self.create_transcription_chunk(
                 session_id,
                 inference_result,
@@ -107,7 +108,7 @@ impl WhisperProcessor {
         } else {
             warn!(
                 "Low confidence transcription: {:.2} < {:.2}",
-                inference_result.confidence, self.confidence_threshold
+                inference_result.confidence, confidence_threshold
             );
             Ok(None)
         }
@@ -216,8 +217,8 @@ impl WhisperProcessor {
     fn apply_noise_reduction(&self, audio: &mut [f32]) {
         // Simple high-pass filter to remove low-frequency noise
         // In production, use proper DSP libraries
-        const CUTOFF = 0.01;
-        let mut prev_sample = 0.0;
+        const CUTOFF: f32 = 0.01;
+        let mut prev_sample: f32 = 0.0;
         
         for sample in audio.iter_mut() {
             let filtered = *sample - prev_sample * CUTOFF;
@@ -235,7 +236,8 @@ impl WhisperProcessor {
         processing_time: Duration,
         model_used: String,
     ) -> Result<TranscriptionChunk> {
-        let end_time = start_time + Duration::from_secs_f32(self.preprocessing_params.chunk_size_seconds);
+        let chunk_duration_secs = self.preprocessing_params.chunk_size as f32 / self.preprocessing_params.sample_rate as f32;
+        let end_time = start_time + Duration::from_secs_f32(chunk_duration_secs);
         
         // Detect language from inference result
         let language = match inference_result.language_detected.as_str() {
@@ -262,7 +264,7 @@ impl WhisperProcessor {
     /// Detect language from audio (using Whisper's built-in detection)
     pub async fn detect_language(&self, audio_data: &[f32], sample_rate: u32) -> Result<LanguageCode> {
         // Use a small audio chunk for language detection
-        let detection_chunk_size = self.preprocessing_params.sample_rate * 10; // 10 seconds
+        let detection_chunk_size = (self.preprocessing_params.sample_rate * 10) as usize; // 10 seconds
         let chunk = if audio_data.len() > detection_chunk_size {
             &audio_data[..detection_chunk_size]
         } else {
@@ -299,14 +301,15 @@ impl WhisperProcessor {
     }
 
     /// Set confidence threshold
-    pub fn set_confidence_threshold(&mut self, threshold: f32) {
-        self.confidence_threshold = threshold.clamp(0.0, 1.0);
-        info!("Updated confidence threshold to {:.2}", self.confidence_threshold);
+    pub async fn set_confidence_threshold(&self, threshold: f32) {
+        let clamped_threshold = threshold.clamp(0.0, 1.0);
+        *self.confidence_threshold.write().await = clamped_threshold;
+        info!("Updated confidence threshold to {:.2}", clamped_threshold);
     }
 
     /// Get current confidence threshold
-    pub fn get_confidence_threshold(&self) -> f32 {
-        self.confidence_threshold
+    pub async fn get_confidence_threshold(&self) -> f32 {
+        *self.confidence_threshold.read().await
     }
 
     /// Check if processor is ready

@@ -1,7 +1,7 @@
 //! Tauri command handlers for audio operations
 
 use std::sync::{Arc, Mutex};
-use tauri::{State, Manager, AppHandle, Window};
+use tauri::{State, AppHandle, Window, Emitter};
 use serde::{Serialize, Deserialize};
 use tracing::{info, error, debug};
 
@@ -382,7 +382,7 @@ pub async fn refresh_audio_devices(
                         timestamp: chrono::Utc::now().timestamp_millis() as u64,
                     };
                     
-                    if let Err(e) = app_handle.emit_all("audio_devices_changed", &event) {
+                    if let Err(e) = app_handle.emit("audio_devices_changed", &event) {
                         error!("Failed to emit device change event: {}", e);
                     }
                     
@@ -420,7 +420,7 @@ async fn start_audio_event_broadcasting(
                 timestamp: chrono::Utc::now().timestamp_millis() as u64,
             };
             
-            if let Err(e) = app_handle_status.emit_all("audio_status_changed", &event) {
+            if let Err(e) = app_handle_status.emit("audio_status_changed", &event) {
                 error!("Failed to emit status change event: {}", e);
             }
         }
@@ -445,7 +445,7 @@ async fn start_audio_event_broadcasting(
                     timestamp: chrono::Utc::now().timestamp_millis() as u64,
                 };
                 
-                if let Err(e) = app_handle_level.emit_all("audio_level_update", &event) {
+                if let Err(e) = app_handle_level.emit("audio_level_update", &event) {
                     error!("Failed to emit level update event: {}", e);
                 } else {
                     last_emit = std::time::Instant::now();

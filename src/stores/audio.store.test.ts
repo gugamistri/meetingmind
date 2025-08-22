@@ -2,7 +2,7 @@
  * Tests for audio store using Zustand
  */
 
-import { beforeEach, describe, it, expect, vi } from 'vitest';
+import { beforeEach, afterAll, describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useAudioStore } from './audio.store';
 import { tauriAudioService } from '../services/tauri.service';
@@ -61,7 +61,6 @@ describe('Audio Store', () => {
       isStarting: false,
       isStopping: false,
       hasError: false,
-      currentDevice: undefined,
       availableDevices: [],
       audioLevel: 0,
       peakLevel: 0,
