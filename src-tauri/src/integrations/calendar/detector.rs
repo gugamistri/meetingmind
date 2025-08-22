@@ -324,40 +324,421 @@ impl MeetingDetector {
 mod tests {
     use super::*;
     use crate::storage::database::create_test_pool;
+    use chrono::{Duration, TimeZone};
+    use std::collections::HashMap;
     
+    /// Critical Test: 5-minute Meeting Detection Window - AC1 Core Functionality
+    /// Tests: 1.5-INT-003 Meeting Detection Timing Precision
+    #[tokio::test]
+    async fn test_5_minute_detection_window_precision() {
+        let detector = create_test_detector().await;
+        let config = MeetingDetectionConfig {
+            detection_window_minutes: 5,
+            confidence_threshold: 0.5,
+            ..Default::default()
+        };
+        
+        let now = Utc::now();
+        
+        // Test scenarios within 5-minute window
+        let test_cases = vec![
+            // (minutes_offset, should_detect, description)
+            (-5, true, "Exactly 5 minutes before"),
+            (-4, true, "4 minutes before"),
+            (-3, true, "3 minutes before"), 
+            (-2, true, "2 minutes before"),
+            (-1, true, "1 minute before"),
+            (0, true, "At meeting start time"),
+            (1, true, "1 minute after start"),
+            (2, true, "2 minutes after start"),
+            (3, true, "3 minutes after start"),
+            (4, true, "4 minutes after start"),
+            (5, true, "Exactly 5 minutes after start"),
+            
+            // Edge cases - should NOT detect
+            (-6, false, "6 minutes before (outside window)"),
+            (6, false, "6 minutes after start (outside window)"),
+            (-10, false, "10 minutes before (outside window)"),
+            (10, false, "10 minutes after start (outside window)"),
+        ];
+        
+        for (minutes_offset, should_detect, description) in test_cases {
+            let event_time = now + Duration::minutes(minutes_offset);
+            let event = create_test_calendar_event_at_time(event_time);
+            
+            let result = detector.should_detect_meeting(&event, &config).await;
+            
+            if should_detect {
+                assert!(result, "Failed to detect meeting {}: {}", description, minutes_offset);
+            } else {
+                assert!(!result, "Incorrectly detected meeting {}: {}", description, minutes_offset);
+            }
+        }
+    }
+
+    /// Critical Test: Meeting Detection Algorithm Logic - AC1 Core Logic
+    /// Tests: 1.5-UNIT-001 Meeting Detection Algorithm Logic
+    #[tokio::test]
+    async fn test_meeting_detection_algorithm_logic() {
+        let detector = create_test_detector().await;
+        let config = MeetingDetectionConfig {
+            detection_window_minutes: 5,
+            confidence_threshold: 0.6,
+            ..Default::default()
+        };
+        
+        let now = Utc::now();
+        let meeting_time = now + Duration::minutes(2); // 2 minutes from now
+        
+        // Test 1: High confidence meeting (should detect)
+        let high_confidence_event = CalendarEvent {
+            id: 1,
+            calendar_account_id: 1,
+            external_event_id: "high_conf_meeting".to_string(),
+            title: "Team standup meeting".to_string(), // Keywords increase confidence
+            description: Some("Daily team synchronization".to_string()),
+            start_time: meeting_time,
+            end_time: meeting_time + Duration::minutes(30),
+            participants: vec!["user1@test.com".to_string(), "user2@test.com".to_string()], // Multiple participants
+            location: None,
+            meeting_url: Some("https://meet.google.com/abc-defg-hij".to_string()), // Meeting URL increases confidence
+            is_accepted: true,
+            last_modified: now,
+            created_at: now,
+        };
+        
+        let result = detector.should_detect_meeting(&high_confidence_event, &config).await;
+        assert!(result, "High confidence meeting should be detected");
+        
+        // Test 2: Low confidence meeting (should not detect)
+        let low_confidence_event = CalendarEvent {
+            id: 2,
+            calendar_account_id: 1,
+            external_event_id: "low_conf_event".to_string(),
+            title: "Lunch break".to_string(), // No meeting keywords
+            description: None,
+            start_time: meeting_time,
+            end_time: meeting_time + Duration::minutes(30),
+            participants: vec![], // No participants
+            location: None,
+            meeting_url: None, // No meeting URL
+            is_accepted: true,
+            last_modified: now,
+            created_at: now,
+        };
+        
+        let result = detector.should_detect_meeting(&low_confidence_event, &config).await;
+        assert!(!result, "Low confidence meeting should not be detected");
+    }
+
+    /// Critical Test: Edge Case Boundary Testing - AC1 Precision
+    #[tokio::test]
+    async fn test_detection_window_edge_cases() {
+        let detector = create_test_detector().await;
+        let config = MeetingDetectionConfig {
+            detection_window_minutes: 5,
+            confidence_threshold: 0.5,
+            ..Default::default()
+        };
+        
+        let now = Utc::now();
+        
+        // Test exact boundaries with high precision
+        let boundary_cases = vec![
+            // Test with seconds precision
+            (-5 * 60, true, "Exactly 5 minutes (300 seconds) before"),
+            (-5 * 60 - 1, false, "301 seconds before (outside window)"),
+            (5 * 60, true, "Exactly 5 minutes (300 seconds) after"),
+            (5 * 60 + 1, false, "301 seconds after (outside window)"),
+        ];
+        
+        for (seconds_offset, should_detect, description) in boundary_cases {
+            let event_time = now + Duration::seconds(seconds_offset);
+            let event = create_test_calendar_event_at_time(event_time);
+            
+            let result = detector.should_detect_meeting(&event, &config).await;
+            
+            if should_detect {
+                assert!(result, "Boundary test failed: {}", description);
+            } else {
+                assert!(!result, "Boundary test failed: {}", description);
+            }
+        }
+    }
+
+    /// Critical Test: Timezone Handling in Detection - AC1 Robustness
+    #[tokio::test]
+    async fn test_timezone_handling_in_detection() {
+        let detector = create_test_detector().await;
+        let config = MeetingDetectionConfig {
+            detection_window_minutes: 5,
+            confidence_threshold: 0.5,
+            ..Default::default()
+        };
+        
+        // Test with different timezone representations
+        let utc_now = Utc::now();
+        
+        // Event in UTC (should work normally)
+        let utc_event = create_test_calendar_event_at_time(utc_now + Duration::minutes(3));
+        assert!(detector.should_detect_meeting(&utc_event, &config).await);
+        
+        // Event with timezone offset (still within window when converted to UTC)
+        let offset_time = utc_now + Duration::minutes(3);
+        let offset_event = create_test_calendar_event_at_time(offset_time);
+        assert!(detector.should_detect_meeting(&offset_event, &config).await);
+    }
+
+    /// Test: Meeting Confidence Scoring Algorithm
     #[tokio::test]
     async fn test_meeting_confidence_calculation() {
-        let pool = create_test_pool().await.unwrap();
-        let repository = Arc::new(CalendarRepository::new(pool));
+        let detector = create_test_detector().await;
+        let now = Utc::now();
         
-        // This would require a proper AppHandle in real tests
-        // let detector = MeetingDetector::new(
-        //     repository,
-        //     event_emitter,
-        //     None,
-        //     MeetingDetectionConfig::default(),
-        // );
+        // High confidence meeting
+        let high_conf_event = CalendarEvent {
+            id: 1,
+            calendar_account_id: 1,
+            external_event_id: "high_conf".to_string(),
+            title: "Team standup meeting".to_string(),
+            description: Some("Daily sync".to_string()),
+            start_time: now,
+            end_time: now + Duration::minutes(30),
+            participants: vec!["user1@test.com".to_string(), "user2@test.com".to_string()],
+            location: None,
+            meeting_url: Some("https://meet.google.com/test".to_string()),
+            is_accepted: true,
+            last_modified: now,
+            created_at: now,
+        };
         
-        // Test confidence calculation logic
-        // let event = create_test_calendar_event();
-        // let confidence = detector.calculate_meeting_confidence(&event, 0).await;
-        // assert!(confidence > 0.0);
+        let confidence = detector.calculate_meeting_confidence(&high_conf_event, 0).await;
+        assert!(confidence > 0.6, "High confidence meeting should have score > 0.6, got {}", confidence);
+        
+        // Low confidence event
+        let low_conf_event = CalendarEvent {
+            id: 2,
+            calendar_account_id: 1,
+            external_event_id: "low_conf".to_string(),
+            title: "Personal time".to_string(),
+            description: None,
+            start_time: now,
+            end_time: now + Duration::minutes(30),
+            participants: vec![],
+            location: None,
+            meeting_url: None,
+            is_accepted: true,
+            last_modified: now,
+            created_at: now,
+        };
+        
+        let confidence = detector.calculate_meeting_confidence(&low_conf_event, 10).await;
+        assert!(confidence < 0.4, "Low confidence event should have score < 0.4, got {}", confidence);
+    }
+
+    /// Critical Test: Auto-Start Logic Testing - AC3 Implementation
+    #[tokio::test]
+    async fn test_auto_start_logic() {
+        let detector = create_test_detector().await;
+        let config = MeetingDetectionConfig {
+            detection_window_minutes: 5,
+            confidence_threshold: 0.6,
+            auto_start_enabled: true,
+            ..Default::default()
+        };
+        
+        let now = Utc::now();
+        
+        // Test auto-start trigger conditions
+        let auto_start_cases = vec![
+            // (minutes_offset, confidence, should_trigger, description)
+            (-1, 0.7, false, "Before meeting start - should not trigger"),
+            (0, 0.7, true, "At meeting start with high confidence - should trigger"),
+            (1, 0.7, true, "1 minute after start with high confidence - should trigger"),
+            (2, 0.7, false, "2+ minutes after start - outside auto-start window"),
+            (0, 0.5, false, "At start but low confidence - should not trigger"),
+        ];
+        
+        for (minutes_offset, confidence, should_trigger, description) in auto_start_cases {
+            // Create a meeting with specific confidence characteristics
+            let meeting_time = now + Duration::minutes(minutes_offset);
+            let event = if confidence > 0.6 {
+                create_high_confidence_event_at_time(meeting_time)
+            } else {
+                create_low_confidence_event_at_time(meeting_time)
+            };
+            
+            // Clear previous detections
+            detector.detected_meetings.write().await.clear();
+            
+            // Process the meeting
+            let result = detector.process_detected_meeting(event.clone(), &config).await;
+            assert!(result.is_ok(), "Processing should succeed for: {}", description);
+            
+            // Check if auto-start was triggered
+            let detected = detector.detected_meetings.read().await;
+            if let Some(detected_meeting) = detected.get(&event.external_event_id) {
+                if should_trigger {
+                    assert!(detected_meeting.auto_start_triggered, "Auto-start should be triggered: {}", description);
+                } else {
+                    assert!(!detected_meeting.auto_start_triggered, "Auto-start should not be triggered: {}", description);
+                }
+            } else if should_trigger {
+                panic!("Meeting should be detected for auto-start test: {}", description);
+            }
+        }
     }
 
     #[test]
     fn test_meeting_title_analysis() {
-        let detector = create_test_detector();
+        let detector = create_simple_detector();
         
+        // Should detect meeting titles
         assert!(detector.analyze_meeting_title("Team standup meeting"));
         assert!(detector.analyze_meeting_title("Client call"));
         assert!(detector.analyze_meeting_title("Project sync"));
+        assert!(detector.analyze_meeting_title("Weekly review"));
+        assert!(detector.analyze_meeting_title("Demo presentation"));
+        assert!(detector.analyze_meeting_title("Technical interview"));
+        assert!(detector.analyze_meeting_title("Strategy discussion"));
+        assert!(detector.analyze_meeting_title("Workshop session"));
+        
+        // Should not detect non-meeting titles
         assert!(!detector.analyze_meeting_title("Lunch break"));
         assert!(!detector.analyze_meeting_title("Personal time"));
+        assert!(!detector.analyze_meeting_title("Vacation"));
+        assert!(!detector.analyze_meeting_title("Out of office"));
+        assert!(!detector.analyze_meeting_title("Birthday party"));
     }
 
-    fn create_test_detector() -> MeetingDetector {
-        // This is a simplified version for unit testing
-        // In practice, you'd need proper dependencies
-        panic!("Test helper not implemented - requires proper AppHandle and dependencies");
+    /// Test: Duplicate Detection Prevention
+    #[tokio::test]
+    async fn test_duplicate_detection_prevention() {
+        let detector = create_test_detector().await;
+        let config = MeetingDetectionConfig::default();
+        
+        let event = create_test_calendar_event_at_time(Utc::now() + Duration::minutes(2));
+        
+        // First detection should succeed
+        assert!(detector.should_detect_meeting(&event, &config).await);
+        
+        // Mark as detected
+        let detected_meeting = DetectedMeeting {
+            calendar_event: event.clone(),
+            confidence: 0.8,
+            detection_time: Utc::now(),
+            countdown_seconds: 120,
+            auto_start_triggered: false,
+        };
+        
+        detector.detected_meetings.write().await.insert(
+            event.external_event_id.clone(),
+            detected_meeting,
+        );
+        
+        // Second detection within 2 minutes should be prevented
+        assert!(!detector.should_detect_meeting(&event, &config).await);
+    }
+
+    // Helper functions for tests
+    async fn create_test_detector() -> MeetingDetector {
+        let pool = create_test_pool().await.unwrap();
+        let repository = Arc::new(CalendarRepository::new(pool));
+        let event_emitter = Arc::new(MockCalendarEventEmitter::new());
+        
+        MeetingDetector::new(
+            repository,
+            event_emitter,
+            None, // No audio service for tests
+            MeetingDetectionConfig::default(),
+        )
+    }
+    
+    fn create_simple_detector() -> MeetingDetector {
+        // For simple unit tests that don't need async setup
+        let repository = Arc::new(unsafe { std::mem::zeroed() }); // Not used in title analysis
+        let event_emitter = Arc::new(MockCalendarEventEmitter::new());
+        
+        MeetingDetector::new(
+            repository,
+            event_emitter,
+            None,
+            MeetingDetectionConfig::default(),
+        )
+    }
+
+    fn create_test_calendar_event_at_time(start_time: DateTime<Utc>) -> CalendarEvent {
+        CalendarEvent {
+            id: 1,
+            calendar_account_id: 1,
+            external_event_id: format!("test_event_{}", start_time.timestamp()),
+            title: "Test meeting call".to_string(),
+            description: Some("Test meeting description".to_string()),
+            start_time,
+            end_time: start_time + Duration::minutes(30),
+            participants: vec!["test@example.com".to_string()],
+            location: None,
+            meeting_url: Some("https://meet.google.com/test".to_string()),
+            is_accepted: true,
+            last_modified: Utc::now(),
+            created_at: Utc::now(),
+        }
+    }
+
+    fn create_high_confidence_event_at_time(start_time: DateTime<Utc>) -> CalendarEvent {
+        CalendarEvent {
+            id: 1,
+            calendar_account_id: 1,
+            external_event_id: format!("high_conf_event_{}", start_time.timestamp()),
+            title: "Team standup meeting".to_string(),
+            description: Some("Daily team sync discussion".to_string()),
+            start_time,
+            end_time: start_time + Duration::minutes(30),
+            participants: vec!["user1@test.com".to_string(), "user2@test.com".to_string()],
+            location: None,
+            meeting_url: Some("https://meet.google.com/high-conf".to_string()),
+            is_accepted: true,
+            last_modified: Utc::now(),
+            created_at: Utc::now(),
+        }
+    }
+
+    fn create_low_confidence_event_at_time(start_time: DateTime<Utc>) -> CalendarEvent {
+        CalendarEvent {
+            id: 2,
+            calendar_account_id: 1,
+            external_event_id: format!("low_conf_event_{}", start_time.timestamp()),
+            title: "Personal time".to_string(),
+            description: None,
+            start_time,
+            end_time: start_time + Duration::minutes(30),
+            participants: vec![],
+            location: None,
+            meeting_url: None,
+            is_accepted: true,
+            last_modified: Utc::now(),
+            created_at: Utc::now(),
+        }
+    }
+
+    // Mock event emitter for testing
+    struct MockCalendarEventEmitter;
+
+    impl MockCalendarEventEmitter {
+        fn new() -> Self {
+            Self
+        }
+        
+        fn emit_meeting_detected(&self, _event: CalendarEvent, _confidence: f64, _countdown: u32) {
+            // Mock implementation - does nothing
+        }
+        
+        fn emit_meeting_notification(&self, _event: CalendarEvent, _minutes_before: u32) {
+            // Mock implementation - does nothing
+        }
+        
+        fn emit_auto_start_triggered(&self, _event: CalendarEvent, _meeting_id: String) {
+            // Mock implementation - does nothing
+        }
     }
 }

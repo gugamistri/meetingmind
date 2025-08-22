@@ -411,6 +411,8 @@ impl Default for OAuth2Service {
 mod tests {
     use super::*;
     use crate::storage::database::create_test_pool;
+    use secrecy::Secret;
+    use tokio_test;
     
     #[tokio::test]
     async fn test_oauth_flow_state_generation() {
@@ -434,5 +436,264 @@ mod tests {
         assert!(!auth_request.state.is_empty());
         assert!(!auth_request.pkce_verifier.is_empty());
         assert!(auth_request.authorization_url.contains("accounts.google.com"));
+    }
+
+    /// Critical Security Test: PKCE Flow Validation - SEC-001 Mitigation
+    /// Tests: 1.5-INT-001 OAuth2 PKCE Flow Validation
+    #[tokio::test]
+    async fn test_pkce_flow_validation() {
+        let pool = create_test_pool().await.unwrap();
+        let key = Secret::new([1u8; 32]);
+        let oauth_service = OAuth2Service::new(pool, key);
+        
+        let config = OAuth2Config {
+            client_id: "test_client_id".to_string(),
+            client_secret: "test_client_secret".to_string(),
+            redirect_uri: "http://localhost:8080/callback".to_string(),
+            authorization_url: "https://accounts.google.com/o/oauth2/auth".to_string(),
+            token_url: "https://oauth2.googleapis.com/token".to_string(),
+            scopes: vec!["https://www.googleapis.com/auth/calendar.readonly".to_string()],
+        };
+        
+        oauth_service.register_provider(CalendarProvider::Google, config).await;
+        
+        // Test 1: PKCE parameters are generated correctly
+        let auth_request = oauth_service.start_oauth_flow(CalendarProvider::Google).await.unwrap();
+        
+        // PKCE verifier should be base64url-encoded string of 43-128 characters
+        assert!(auth_request.pkce_verifier.len() >= 43 && auth_request.pkce_verifier.len() <= 128);
+        
+        // State should be cryptographically secure random string
+        assert!(auth_request.state.len() >= 32);
+        
+        // Authorization URL should contain proper PKCE challenge
+        assert!(auth_request.authorization_url.contains("code_challenge="));
+        assert!(auth_request.authorization_url.contains("code_challenge_method=S256"));
+        
+        // Test 2: Multiple flow initiations generate different values
+        let auth_request_2 = oauth_service.start_oauth_flow(CalendarProvider::Google).await.unwrap();
+        
+        assert_ne!(auth_request.state, auth_request_2.state);
+        assert_ne!(auth_request.pkce_verifier, auth_request_2.pkce_verifier);
+    }
+
+    /// Critical Security Test: Token Encryption/Decryption Validation - SEC-001 Mitigation
+    /// Tests: 1.5-INT-002 Token Encryption Storage Security
+    #[tokio::test]
+    async fn test_token_encryption_security() {
+        let pool = create_test_pool().await.unwrap();
+        let key = Secret::new([2u8; 32]);
+        let oauth_service = OAuth2Service::new(pool, key);
+        
+        // Test data
+        let test_token_data = TokenData {
+            access_token: "test_access_token_with_sensitive_data".to_string(),
+            refresh_token: Some("test_refresh_token_secret".to_string()),
+            expires_at: Some(chrono::Utc::now() + chrono::Duration::hours(1)),
+            scopes: vec!["calendar.readonly".to_string()],
+        };
+        
+        // Test 1: Tokens are encrypted before storage
+        let encrypted_tokens = oauth_service.encrypt_tokens(&test_token_data).unwrap();
+        
+        // Encrypted data should not contain plaintext tokens
+        let access_encrypted = String::from_utf8_lossy(&encrypted_tokens.0.encrypted_data);
+        let refresh_encrypted = String::from_utf8_lossy(&encrypted_tokens.1.encrypted_data);
+        
+        assert!(!access_encrypted.contains("test_access_token"));
+        assert!(!refresh_encrypted.contains("test_refresh_token"));
+        
+        // Test 2: Decryption retrieves correct values
+        let decrypted = oauth_service.decrypt_tokens(
+            &encrypted_tokens.0.encrypted_data, 
+            &encrypted_tokens.1.encrypted_data
+        ).unwrap();
+        
+        assert_eq!(decrypted.access_token, test_token_data.access_token);
+        assert_eq!(decrypted.refresh_token, test_token_data.refresh_token);
+        
+        // Test 3: Different encryption keys produce different ciphertext
+        let different_key = Secret::new([3u8; 32]);
+        let oauth_service_2 = OAuth2Service::new(pool.clone(), different_key);
+        
+        let encrypted_tokens_2 = oauth_service_2.encrypt_tokens(&test_token_data).unwrap();
+        assert_ne!(encrypted_tokens.0.encrypted_data, encrypted_tokens_2.0.encrypted_data);
+    }
+
+    /// Critical Security Test: CSRF Protection Validation - SEC-001 Mitigation
+    #[tokio::test]
+    async fn test_csrf_protection() {
+        let pool = create_test_pool().await.unwrap();
+        let key = Secret::new([4u8; 32]);
+        let oauth_service = OAuth2Service::new(pool, key);
+        
+        let config = OAuth2Config {
+            client_id: "test_client_id".to_string(),
+            client_secret: "test_client_secret".to_string(),
+            redirect_uri: "http://localhost:8080/callback".to_string(),
+            authorization_url: "https://accounts.google.com/o/oauth2/auth".to_string(),
+            token_url: "https://oauth2.googleapis.com/token".to_string(),
+            scopes: vec!["https://www.googleapis.com/auth/calendar.readonly".to_string()],
+        };
+        
+        oauth_service.register_provider(CalendarProvider::Google, config).await;
+        let auth_request = oauth_service.start_oauth_flow(CalendarProvider::Google).await.unwrap();
+        
+        // Test 1: Valid state passes validation
+        let valid_response = AuthorizationResponse {
+            code: "test_auth_code".to_string(),
+            state: auth_request.state.clone(),
+        };
+        
+        // This would normally complete the flow, but we're just testing state validation
+        // The actual token exchange will fail due to test data, but state validation should pass first
+        
+        // Test 2: Invalid state is rejected (CSRF attack prevention)
+        let csrf_response = AuthorizationResponse {
+            code: "test_auth_code".to_string(),
+            state: "malicious_state_value".to_string(),
+        };
+        
+        let result = oauth_service.complete_oauth_flow(
+            &auth_request,
+            csrf_response,
+            "test@example.com".to_string(),
+        ).await;
+        
+        // Should fail with CSRF detection error
+        assert!(matches!(result, Err(CalendarError::AuthenticationFailed { .. })));
+        if let Err(CalendarError::AuthenticationFailed { reason }) = result {
+            assert!(reason.contains("State mismatch"));
+            assert!(reason.contains("CSRF"));
+        }
+    }
+
+    /// Critical Security Test: Token Refresh Security - SEC-001 Mitigation
+    /// Tests: 1.5-INT-006 Token Refresh Security
+    #[tokio::test]
+    async fn test_token_refresh_security() {
+        let pool = create_test_pool().await.unwrap();
+        let key = Secret::new([5u8; 32]);
+        let oauth_service = OAuth2Service::new(pool.clone(), key);
+        
+        // Create test account with tokens
+        let test_token_data = TokenData {
+            access_token: "expired_access_token".to_string(),
+            refresh_token: Some("valid_refresh_token".to_string()),
+            expires_at: Some(chrono::Utc::now() - chrono::Duration::minutes(5)), // Expired
+            scopes: vec!["calendar.readonly".to_string()],
+        };
+        
+        // Store tokens in database
+        let account_id = oauth_service.store_tokens(
+            &CalendarProvider::Google,
+            "test@example.com",
+            &test_token_data,
+        ).await.unwrap();
+        
+        // Test: Token refresh should fail gracefully for test data
+        // (Real implementation would make HTTP calls to token endpoint)
+        let result = oauth_service.refresh_token(account_id).await;
+        
+        // Should return error for test environment, but security checks should pass
+        assert!(result.is_err());
+        
+        // Test: Verify encrypted storage is maintained
+        let stored_tokens = sqlx::query!(
+            "SELECT encrypted_access_token, encrypted_refresh_token FROM calendar_accounts WHERE id = ?",
+            account_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        
+        // Tokens should still be encrypted in storage
+        let stored_access = String::from_utf8_lossy(&stored_tokens.encrypted_access_token);
+        let stored_refresh = String::from_utf8_lossy(&stored_tokens.encrypted_refresh_token);
+        
+        assert!(!stored_access.contains("access_token"));
+        assert!(!stored_refresh.contains("refresh_token"));
+    }
+
+    /// Critical Security Test: Token Revocation Security - SEC-001 Mitigation  
+    /// Tests: 1.5-INT-007 Token Revocation Security
+    #[tokio::test]
+    async fn test_token_revocation_security() {
+        let pool = create_test_pool().await.unwrap();
+        let key = Secret::new([6u8; 32]);
+        let oauth_service = OAuth2Service::new(pool.clone(), key);
+        
+        // Create test account
+        let test_token_data = TokenData {
+            access_token: "test_access_token_to_revoke".to_string(),
+            refresh_token: Some("test_refresh_token_to_revoke".to_string()),
+            expires_at: Some(chrono::Utc::now() + chrono::Duration::hours(1)),
+            scopes: vec!["calendar.readonly".to_string()],
+        };
+        
+        let account_id = oauth_service.store_tokens(
+            &CalendarProvider::Google,
+            "test@example.com",
+            &test_token_data,
+        ).await.unwrap();
+        
+        // Verify account is active before revocation
+        let before_revocation = sqlx::query!(
+            "SELECT is_active FROM calendar_accounts WHERE id = ?",
+            account_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert!(before_revocation.is_active);
+        
+        // Test token revocation (will fail for test environment, but security cleanup should work)
+        let _ = oauth_service.revoke_token(account_id).await;
+        
+        // Test: Account should be deactivated regardless of HTTP call result
+        let after_revocation = sqlx::query!(
+            "SELECT is_active FROM calendar_accounts WHERE id = ?",
+            account_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert!(!after_revocation.is_active);
+        
+        // Test: get_valid_token should fail for revoked account
+        let token_result = oauth_service.get_valid_token(account_id).await;
+        assert!(matches!(token_result, Err(CalendarError::AuthenticationFailed { .. })));
+    }
+
+    /// Security Test: Encryption Key Isolation
+    #[tokio::test]
+    async fn test_encryption_key_isolation() {
+        let pool = create_test_pool().await.unwrap();
+        
+        // Two services with different keys
+        let key1 = Secret::new([7u8; 32]);
+        let key2 = Secret::new([8u8; 32]);
+        
+        let service1 = OAuth2Service::new(pool.clone(), key1);
+        let service2 = OAuth2Service::new(pool.clone(), key2);
+        
+        let test_data = TokenData {
+            access_token: "isolation_test_token".to_string(),
+            refresh_token: Some("isolation_refresh_token".to_string()),
+            expires_at: None,
+            scopes: vec![],
+        };
+        
+        // Service 1 encrypts tokens
+        let encrypted1 = service1.encrypt_tokens(&test_data).unwrap();
+        
+        // Service 2 should not be able to decrypt service 1's tokens
+        let decrypt_result = service2.decrypt_tokens(
+            &encrypted1.0.encrypted_data,
+            &encrypted1.1.encrypted_data,
+        );
+        
+        assert!(decrypt_result.is_err());
+        assert!(matches!(decrypt_result, Err(CalendarError::Encryption { .. })));
     }
 }

@@ -55,6 +55,8 @@ pub struct GoogleCalendarService {
     oauth_service: Arc<OAuth2Service>,
     http_client: reqwest::Client,
     base_url: String,
+    rate_limiter: Arc<crate::integrations::calendar::RateLimiter>,
+    circuit_breaker: Arc<crate::integrations::calendar::CircuitBreaker>,
 }
 
 impl GoogleCalendarService {
@@ -64,10 +66,20 @@ impl GoogleCalendarService {
             .build()
             .expect("Failed to create HTTP client");
 
+        // Configure circuit breaker for calendar API calls
+        let circuit_breaker_config = crate::integrations::calendar::CircuitBreakerConfig {
+            failure_threshold: 5,
+            timeout_duration: std::time::Duration::from_secs(60),
+            success_threshold: 3,
+            failure_window: std::time::Duration::from_secs(300),
+        };
+
         Self {
             oauth_service,
             http_client,
             base_url: "https://www.googleapis.com/calendar/v3".to_string(),
+            rate_limiter: Arc::new(crate::integrations::calendar::RateLimiter::new()),
+            circuit_breaker: Arc::new(crate::integrations::calendar::CircuitBreaker::new(circuit_breaker_config)),
         }
     }
 
@@ -93,35 +105,42 @@ impl GoogleCalendarService {
                 url.push_str(&format!("&pageToken={}", token));
             }
 
-            let response = self
-                .http_client
-                .get(&url)
-                .header(AUTHORIZATION, format!("Bearer {}", access_token))
-                .header(CONTENT_TYPE, "application/json")
-                .send()
-                .await?;
+            // CRITICAL: Check rate limits before making API call
+            self.rate_limiter.check_rate_limit(&url, 1).await?;
 
-            if response.status() == reqwest::StatusCode::UNAUTHORIZED {
-                // Token might be expired, try to refresh
-                let new_token = self.oauth_service.refresh_token(account_id).await?;
-                return self.fetch_events_with_token(account_id, &new_token.access_token, time_range).await;
-            }
+            // ENHANCED: Use circuit breaker for resilient API calls
+            let calendar_response = self.circuit_breaker.execute(async {
+                let response = self
+                    .http_client
+                    .get(&url)
+                    .header(AUTHORIZATION, format!("Bearer {}", access_token))
+                    .header(CONTENT_TYPE, "application/json")
+                    .send()
+                    .await?;
 
-            if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                // Rate limit exceeded
-                let retry_after = response
-                    .headers()
-                    .get("retry-after")
-                    .and_then(|h| h.to_str().ok())
-                    .and_then(|s| s.parse::<u64>().ok())
-                    .unwrap_or(60);
-                
-                return Err(CalendarError::RateLimitExceeded { seconds: retry_after });
-            }
+                if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+                    // Token might be expired, try to refresh
+                    let new_token = self.oauth_service.refresh_token(account_id).await?;
+                    return self.fetch_events_with_token(account_id, &new_token.access_token, time_range).await;
+                }
 
-            response.error_for_status_ref()?;
-            
-            let calendar_response: GoogleCalendarListResponse = response.json().await?;
+                if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                    // Rate limit exceeded at API level - update our rate limiter
+                    let retry_after = response
+                        .headers()
+                        .get("retry-after")
+                        .and_then(|h| h.to_str().ok())
+                        .and_then(|s| s.parse::<u64>().ok())
+                        .unwrap_or(60);
+                    
+                    tracing::warn!("API rate limit exceeded, backing off for {} seconds", retry_after);
+                    return Err(CalendarError::RateLimitExceeded { seconds: retry_after });
+                }
+
+                response.error_for_status_ref()?;
+                let calendar_response: GoogleCalendarListResponse = response.json().await?;
+                Ok(calendar_response)
+            }).await?;
             
             // Convert Google events to our CalendarEvent format
             for google_event in calendar_response.items {
