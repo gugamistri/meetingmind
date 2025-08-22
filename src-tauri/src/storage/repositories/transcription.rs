@@ -90,7 +90,7 @@ impl TranscriptionRepository {
         }
 
         if updates.is_empty() {
-            return Err(AppError::database("No fields to update".to_string()));
+            return Err(AppError::database("No fields to update".to_string()).into());
         }
 
         query.push_str(&updates.join(", "));

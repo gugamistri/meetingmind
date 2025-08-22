@@ -39,6 +39,9 @@ futures = { workspace = true }
 secrecy = { workspace = true }
 async-trait = { workspace = true }
 regex = { workspace = true }
+oauth2 = { workspace = true }
+url = { workspace = true }
+tokio-cron-scheduler = { workspace = true }
 
 [features]
 # This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!

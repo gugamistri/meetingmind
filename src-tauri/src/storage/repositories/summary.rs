@@ -2,6 +2,7 @@
 
 use sqlx::SqlitePool;
 use uuid::Uuid;
+use chrono::{DateTime, Utc, NaiveDateTime};
 
 use crate::ai::types::{SummaryResult, SummaryTemplate, MeetingType, AIProvider};
 use crate::error::Result;
@@ -20,6 +21,12 @@ impl SummaryRepository {
     
     /// Create a new summary
     pub async fn create_summary(&self, summary: &SummaryResult) -> Result<()> {
+        let id = summary.id.to_string();
+        let meeting_id = summary.meeting_id.to_string();
+        let provider = summary.provider.as_str();
+        let processing_time_ms = summary.processing_time_ms as i64;
+        let token_count = summary.token_count.map(|t| t as i64);
+        
         sqlx::query!(
             r#"
             INSERT INTO summaries (
@@ -29,15 +36,15 @@ impl SummaryRepository {
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
-            summary.id.to_string(),
-            summary.meeting_id.to_string(),
+            id,
+            meeting_id,
             summary.template_id,
             summary.content,
             summary.model_used,
-            summary.provider.as_str(),
+            provider,
             summary.cost_usd,
-            summary.processing_time_ms as i64,
-            summary.token_count.map(|t| t as i64),
+            processing_time_ms,
+            token_count,
             summary.confidence_score,
             summary.created_at,
             summary.created_at, // updated_at same as created_at initially
@@ -79,8 +86,14 @@ impl SummaryRepository {
             };
             
             Ok(Some(SummaryResult {
-                id: Uuid::parse_str(&record.id).unwrap(),
-                meeting_id: Uuid::parse_str(&record.meeting_id).unwrap(),
+                id: Uuid::parse_str(&record.id).map_err(|e| crate::error::Error::Database {
+                    message: format!("Invalid UUID format for summary ID: {}", e),
+                    source: Some(e.into()),
+                })?,
+                meeting_id: Uuid::parse_str(&record.meeting_id).map_err(|e| crate::error::Error::Database {
+                    message: format!("Invalid UUID format for meeting ID: {}", e),
+                    source: Some(e.into()),
+                })?,
                 template_id: record.template_id,
                 content: record.content,
                 model_used: record.model_used,
@@ -88,8 +101,11 @@ impl SummaryRepository {
                 cost_usd: record.cost_usd,
                 processing_time_ms: record.processing_time_ms as u64,
                 token_count: record.token_count.map(|t| t as u32),
-                confidence_score: record.confidence_score,
-                created_at: record.created_at,
+                confidence_score: record.confidence_score.map(|s| s as f32),
+                created_at: DateTime::<Utc>::from_naive_utc_and_offset(
+                    record.created_at.unwrap_or_else(|| NaiveDateTime::from_timestamp_opt(0, 0).unwrap().unwrap()),
+                    Utc
+                ),
             }))
         } else {
             Ok(None)

@@ -1,7 +1,8 @@
 //! External service integrations
 
-// TODO: Implement integration modules
-// This is a placeholder for the integrations domain
+pub mod calendar;
+
+pub use calendar::*;
 
 /// Integration service placeholder
 pub struct IntegrationService;
