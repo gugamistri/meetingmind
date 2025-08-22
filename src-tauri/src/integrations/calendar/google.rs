@@ -119,9 +119,21 @@ impl GoogleCalendarService {
                     .await?;
 
                 if response.status() == reqwest::StatusCode::UNAUTHORIZED {
-                    // Token might be expired, try to refresh
+                    // Token might be expired, try to refresh - but we need to return a response struct, not events
                     let new_token = self.oauth_service.refresh_token(account_id).await?;
-                    return self.fetch_events_with_token(account_id, &new_token.access_token, time_range).await;
+                    
+                    // Make a new request with the refreshed token
+                    let retry_response = self
+                        .http_client
+                        .get(&url)
+                        .header(AUTHORIZATION, format!("Bearer {}", new_token.access_token))
+                        .header(CONTENT_TYPE, "application/json")
+                        .send()
+                        .await?;
+                    
+                    retry_response.error_for_status_ref()?;
+                    let calendar_response: GoogleCalendarListResponse = retry_response.json().await?;
+                    return Ok(calendar_response);
                 }
 
                 if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO summary_templates (\n                name, description, prompt_template, meeting_type, is_default,\n                created_at, updated_at\n            )\n            VALUES (?, ?, ?, ?, ?, ?, ?)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "a52e95f876ea9c9aff1d144fd4829840a600bb38a6f044834d35d92f71743a8a"
+}

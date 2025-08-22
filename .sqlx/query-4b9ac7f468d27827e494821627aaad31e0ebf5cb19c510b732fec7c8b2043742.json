@@ -1,0 +1,92 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT ce.id, ce.calendar_account_id, ce.external_event_id, ce.title, ce.description, \n                   ce.start_time, ce.end_time, ce.participants, ce.location, ce.meeting_url, \n                   ce.is_accepted, ce.last_modified, ce.created_at\n            FROM calendar_events ce\n            JOIN calendar_accounts ca ON ce.calendar_account_id = ca.id\n            WHERE ca.is_active = TRUE \n              AND ca.auto_start_enabled = TRUE\n              AND ce.is_accepted = TRUE\n              AND ce.start_time BETWEEN ? AND ?\n            ORDER BY ce.start_time ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Int64"
+      },
+      {
+        "name": "calendar_account_id",
+        "ordinal": 1,
+        "type_info": "Int64"
+      },
+      {
+        "name": "external_event_id",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "title",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "description",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "start_time",
+        "ordinal": 5,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "end_time",
+        "ordinal": 6,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "participants",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "location",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "meeting_url",
+        "ordinal": 9,
+        "type_info": "Text"
+      },
+      {
+        "name": "is_accepted",
+        "ordinal": 10,
+        "type_info": "Bool"
+      },
+      {
+        "name": "last_modified",
+        "ordinal": 11,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 12,
+        "type_info": "Datetime"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "4b9ac7f468d27827e494821627aaad31e0ebf5cb19c510b732fec7c8b2043742"
+}

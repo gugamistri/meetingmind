@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            DELETE FROM usage_records\n            WHERE DATE(created_at) < DATE(?)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "11cc6861512e35f6f0966a5dc70647d8acd33bca062c9d051ee4da1ee4924ff5"
+}

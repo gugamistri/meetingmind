@@ -351,7 +351,7 @@ pub async fn estimate_cost(
     transcription_text: String,
     template_text: Option<String>,
     max_output_tokens: Option<u32>,
-) -> AppResult<CostEstimation> {
+) -> AppResult<crate::ai::CostEstimate> {
     let operation = crate::ai::AIOperation {
         operation_type: crate::ai::OperationType::Summarization,
         input_text: transcription_text,

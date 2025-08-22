@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT updated_at,\n                   CAST((SELECT COUNT(*) FROM calendar_events WHERE calendar_account_id = ?) AS INTEGER) as \"events_count: i64\"\n            FROM calendar_accounts \n            WHERE id = ?\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "updated_at",
+        "ordinal": 0,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "events_count: i64",
+        "ordinal": 1,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true,
+      null
+    ]
+  },
+  "hash": "87f34b034cbde19bbacb581143a04cc511452745095217439c5f3d0f6c83115a"
+}

@@ -232,8 +232,8 @@ impl AIServiceManager {
     async fn record_usage(&self, provider: &AIProvider, cost: f64) {
         let mut tracker = self.cost_tracker.write().await;
         
-        *tracker.daily_spend.entry(*provider).or_insert(0.0) += cost;
-        *tracker.monthly_spend.entry(*provider).or_insert(0.0) += cost;
+        *tracker.daily_spend.entry(provider.clone()).or_insert(0.0) += cost;
+        *tracker.monthly_spend.entry(provider.clone()).or_insert(0.0) += cost;
     }
     
     /// Reset budget counters if we've moved to a new day/month
@@ -246,8 +246,10 @@ impl AIServiceManager {
             if last_reset < today {
                 tracker.daily_spend.clear();
                 
-                // Reset monthly spend if it's a new month
-                if last_reset.month() != today.month() || last_reset.year() != today.year() {
+                // Reset monthly spend if it's a new month - use timestamp comparison
+                let last_month_epoch = last_reset.and_hms_opt(1, 0, 0).unwrap_or_else(|| last_reset.and_hms_opt(0, 0, 0).unwrap()).and_utc().timestamp() / (86400 * 30);
+                let this_month_epoch = today.and_hms_opt(1, 0, 0).unwrap_or_else(|| today.and_hms_opt(0, 0, 0).unwrap()).and_utc().timestamp() / (86400 * 30);
+                if last_month_epoch != this_month_epoch {
                     tracker.monthly_spend.clear();
                 }
             }
@@ -283,12 +285,13 @@ impl AIServiceManager {
             let is_healthy = client.health_check().await.unwrap_or(false);
             
             let rate_limit_status = client.get_rate_limit_status().await.ok();
+            let circuit_breaker_state = self.get_circuit_breaker_state(&provider).await;
             
             results.push(ServiceHealth {
                 provider,
                 is_healthy,
                 rate_limit_status,
-                circuit_breaker_state: self.get_circuit_breaker_state(&provider).await,
+                circuit_breaker_state,
             });
         }
         

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO calendar_accounts (provider, account_email, encrypted_access_token, encrypted_refresh_token, token_expires_at, created_at, updated_at)\n            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)\n            ON CONFLICT(provider, account_email) DO UPDATE SET\n                encrypted_access_token = excluded.encrypted_access_token,\n                encrypted_refresh_token = excluded.encrypted_refresh_token,\n                token_expires_at = excluded.token_expires_at,\n                is_active = TRUE,\n                updated_at = CURRENT_TIMESTAMP\n            RETURNING id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b1c2f85f44eec2d2d99e99f7d0e7b8f4ba046fba071633228b5b8dbd5ae174bb"
+}

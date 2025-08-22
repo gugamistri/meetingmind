@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter};
 
 use crate::integrations::calendar::{CalendarEvent as CalendarEventData, SyncStatus};
 

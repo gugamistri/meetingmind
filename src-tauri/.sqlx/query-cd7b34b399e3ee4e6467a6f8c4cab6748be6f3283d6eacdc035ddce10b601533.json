@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT \n                COUNT(*) as total_operations,\n                SUM(cost_usd) as total_cost,\n                SUM(COALESCE(input_tokens, 0)) as total_input_tokens,\n                SUM(COALESCE(output_tokens, 0)) as total_output_tokens,\n                AVG(cost_usd) as avg_cost_per_operation\n            FROM usage_records\n            WHERE DATE(created_at) BETWEEN DATE(?) AND DATE(?)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "total_operations",
+        "ordinal": 0,
+        "type_info": "Int"
+      },
+      {
+        "name": "total_cost",
+        "ordinal": 1,
+        "type_info": "Float"
+      },
+      {
+        "name": "total_input_tokens",
+        "ordinal": 2,
+        "type_info": "Int"
+      },
+      {
+        "name": "total_output_tokens",
+        "ordinal": 3,
+        "type_info": "Int"
+      },
+      {
+        "name": "avg_cost_per_operation",
+        "ordinal": 4,
+        "type_info": "Float"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "cd7b34b399e3ee4e6467a6f8c4cab6748be6f3283d6eacdc035ddce10b601533"
+}

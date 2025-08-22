@@ -1,13 +1,15 @@
 use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use tauri::State;
+use tauri_plugin_shell::ShellExt;
 
 use crate::integrations::calendar::{
-    OAuth2Service, CalendarRepository, GoogleCalendarService, CalendarService,
+    OAuth2Service, CalendarRepository, GoogleCalendarService,
     CalendarError, CalendarProvider, CalendarAccount, CalendarEvent, 
-    TimeRange, SyncStatus, AuthorizationRequest, AuthorizationResponse,
+    TimeRange, SyncStatus,
 };
-use crate::error::MeetingMindError;
+use crate::integrations::calendar::types::{AuthorizationRequest, AuthorizationResponse};
+use crate::error::Error;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CalendarAuthRequest {
@@ -41,8 +43,8 @@ pub struct UpdateAutoStartRequest {
 }
 
 // Store active OAuth flows temporarily
-static OAUTH_FLOWS: std::sync::Mutex<std::collections::HashMap<String, AuthorizationRequest>> = 
-    std::sync::Mutex::new(std::collections::HashMap::new());
+static OAUTH_FLOWS: std::sync::LazyLock<std::sync::Mutex<std::collections::HashMap<String, AuthorizationRequest>>> = 
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
 
 #[tauri::command]
 pub async fn start_calendar_auth(
@@ -117,7 +119,7 @@ pub async fn sync_calendar_events(
         .map_err(|e| e.to_string())?;
 
     let event_count = events.len() as u32;
-    repository.save_events(&events).await
+    repository.save_events(request.account_id, events).await
         .map_err(|e| e.to_string())?;
 
     Ok(event_count)

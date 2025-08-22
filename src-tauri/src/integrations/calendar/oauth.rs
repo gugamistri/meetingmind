@@ -9,11 +9,11 @@ use tokio::sync::RwLock;
 use url::Url;
 use rand::Rng;
 use chacha20poly1305::{
-    aead::{Aead, KeyInit, OsRng},
+    aead::{Aead, AeadCore, KeyInit, OsRng},
     ChaCha20Poly1305, Nonce,
 };
 
-use crate::error::MeetingMindError;
+use crate::error::Error;
 use super::types::{
     CalendarError, CalendarProvider, OAuth2Config, AuthorizationRequest, 
     AuthorizationResponse, TokenData, EncryptedToken,
@@ -266,6 +266,7 @@ impl OAuth2Service {
 
     async fn store_tokens(&self, provider: &CalendarProvider, account_email: &str, token_data: &TokenData) -> Result<i64, CalendarError> {
         let encrypted_tokens = self.encrypt_tokens(token_data)?;
+        let provider_str = provider.to_string();
 
         let account_id = sqlx::query!(
             r#"
@@ -279,7 +280,7 @@ impl OAuth2Service {
                 updated_at = CURRENT_TIMESTAMP
             RETURNING id
             "#,
-            provider.to_string(),
+            provider_str,
             account_email,
             encrypted_tokens.0.encrypted_data,
             encrypted_tokens.1.encrypted_data,

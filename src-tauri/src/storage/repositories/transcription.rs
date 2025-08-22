@@ -15,6 +15,7 @@ use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 /// Repository for transcription-related database operations
+#[derive(Clone)]
 pub struct TranscriptionRepository {
     pool: DatabasePool,
 }

@@ -33,6 +33,12 @@ pub fn run() {
             // App commands
             commands::get_app_info,
             commands::health_check,
+            // Meeting commands
+            commands::get_meeting_detail,
+            commands::update_meeting,
+            commands::delete_meeting,
+            commands::duplicate_meeting,
+            commands::archive_meeting,
             // Transcription commands
             commands::initialize_transcription_service,
             commands::start_transcription,

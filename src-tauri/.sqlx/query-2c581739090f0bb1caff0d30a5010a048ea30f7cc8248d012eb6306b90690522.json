@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            UPDATE summary_templates\n            SET name = ?, description = ?, prompt_template = ?,\n                meeting_type = ?, is_default = ?, updated_at = CURRENT_TIMESTAMP\n            WHERE id = ?\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "2c581739090f0bb1caff0d30a5010a048ea30f7cc8248d012eb6306b90690522"
+}

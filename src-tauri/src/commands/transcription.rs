@@ -294,7 +294,7 @@ pub async fn is_transcription_ready(
 
 /// Get available models
 #[tauri::command]
-pub async fn get_available_models() -> Result<Vec<String>> {
+pub async fn get_available_models() -> std::result::Result<Vec<String>, String> {
     debug!("Getting available models");
     
     // Return list of supported models
@@ -309,7 +309,7 @@ pub async fn get_available_models() -> Result<Vec<String>> {
 
 /// Get supported languages
 #[tauri::command]
-pub async fn get_supported_languages() -> Result<Vec<String>> {
+pub async fn get_supported_languages() -> std::result::Result<Vec<String>, String> {
     debug!("Getting supported languages");
     
     // Return list of supported languages
@@ -326,7 +326,7 @@ pub async fn get_supported_languages() -> Result<Vec<String>> {
 #[tauri::command]
 pub async fn transcription_health_check(
     transcription_state: State<'_, TranscriptionState>,
-) -> Result<serde_json::Value> {
+) -> std::result::Result<serde_json::Value, String> {
     debug!("Performing transcription health check");
     
     let state = transcription_state.read().await;

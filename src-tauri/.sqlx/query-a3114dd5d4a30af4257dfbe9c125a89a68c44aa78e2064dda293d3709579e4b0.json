@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT \n                service_provider,\n                COUNT(*) as operation_count,\n                SUM(cost_usd) as total_cost,\n                AVG(cost_usd) as avg_cost\n            FROM usage_records\n            WHERE DATE(created_at) BETWEEN DATE(?) AND DATE(?)\n            GROUP BY service_provider\n            ORDER BY total_cost DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "service_provider",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "operation_count",
+        "ordinal": 1,
+        "type_info": "Int64"
+      },
+      {
+        "name": "total_cost",
+        "ordinal": 2,
+        "type_info": "Float"
+      },
+      {
+        "name": "avg_cost",
+        "ordinal": 3,
+        "type_info": "Float"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "a3114dd5d4a30af4257dfbe9c125a89a68c44aa78e2064dda293d3709579e4b0"
+}

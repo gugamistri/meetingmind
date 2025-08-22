@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM summaries WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "d6bbcda7e09d8994d5c0377fe6e6e25485fb0809932bcf2a5b72a15e3e447c3b"
+}

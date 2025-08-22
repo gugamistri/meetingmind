@@ -2,6 +2,7 @@
 
 use async_trait::async_trait;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
+use secrecy::ExposeSecret;
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 use uuid::Uuid;
@@ -49,7 +50,7 @@ impl OpenAIClient {
             HeaderValue::from_str(&auth_value)
                 .map_err(|e| Error::Configuration {
                     message: "Invalid API key format".to_string(),
-                    source: e.into(),
+                    source: Some(Box::new(e)),
                 })?,
         );
         
@@ -84,7 +85,7 @@ impl OpenAIClient {
                             .map_err(|e| Error::AIService {
                                 provider: "openai".to_string(),
                                 message: format!("Failed to parse response: {}", e),
-                                source: e.into(),
+                                source: Some(e.into()),
                             });
                     } else if status == 429 {
                         // Rate limited, wait and retry
@@ -105,7 +106,7 @@ impl OpenAIClient {
                     last_error = Some(Error::AIService {
                         provider: "openai".to_string(),
                         message: format!("Request failed: {}", e),
-                        source: e.into(),
+                        source: Some(e.into()),
                     });
                 }
             }
@@ -160,16 +161,15 @@ impl AIServiceClient for OpenAIClient {
         
         let content = response.choices
             .first()
-            .and_then(|choice| choice.message.content.as_ref())
+            .map(|choice| choice.message.content.clone())
             .ok_or_else(|| Error::AIService {
                 provider: "openai".to_string(),
                 message: "No content in response".to_string(),
                 source: None,
-            })?
-            .clone();
+            })?;
         
         // Calculate cost based on usage
-        let cost_usd = if let Some(usage) = response.usage {
+        let cost_usd = if let Some(ref usage) = response.usage {
             calculate_openai_cost(&self.config.model, usage.prompt_tokens, usage.completion_tokens)
         } else {
             0.0
@@ -257,7 +257,7 @@ impl AIServiceClient for OpenAIClient {
             Err(e) => Err(Error::AIService {
                 provider: "openai".to_string(),
                 message: format!("Failed to get rate limit status: {}", e),
-                source: e.into(),
+                source: Some(Box::new(e)),
             }),
         }
     }

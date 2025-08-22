@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO summaries (\n                id, meeting_id, template_id, content, model_used, provider,\n                cost_usd, processing_time_ms, token_count, confidence_score,\n                created_at, updated_at\n            )\n            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 12
+    },
+    "nullable": []
+  },
+  "hash": "ac8661a228324d885a57e9c1dd521a3bb7f5c564ea99e8603547f4f04f5e7829"
+}

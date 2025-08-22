@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT provider, account_email, encrypted_access_token, encrypted_refresh_token, token_expires_at\n            FROM calendar_accounts \n            WHERE id = ? AND is_active = TRUE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "provider",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "account_email",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "encrypted_access_token",
+        "ordinal": 2,
+        "type_info": "Blob"
+      },
+      {
+        "name": "encrypted_refresh_token",
+        "ordinal": 3,
+        "type_info": "Blob"
+      },
+      {
+        "name": "token_expires_at",
+        "ordinal": 4,
+        "type_info": "Datetime"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "48deb3b89fd7d23058c6fbcd958e50963053228fa50b373d4607046d9fd697df"
+}

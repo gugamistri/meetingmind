@@ -46,7 +46,8 @@ impl CostTracker {
     /// Get current usage statistics
     pub async fn get_current_usage(&self) -> Result<UsageStats> {
         let today = chrono::Local::now().date_naive();
-        let month_start = NaiveDate::from_ymd_opt(today.year(), today.month(), 1)
+        // Get first day of current month using format/parse approach
+        let month_start = NaiveDate::parse_from_str(&format!("{}-01", today.format("%Y-%m")), "%Y-%m-%d")
             .unwrap_or(today);
         
         // Get daily usage
@@ -140,7 +141,7 @@ impl CostTracker {
         let start_date = end_date - chrono::Duration::days(days as i64);
         
         let usage_records = self.repository
-            .get_usage_by_provider_and_date_range(provider, start_date, end_date)
+            .get_usage_by_provider_and_date_range(provider.clone(), start_date, end_date)
             .await?;
         
         let total_cost = calculate_total_cost(&usage_records);

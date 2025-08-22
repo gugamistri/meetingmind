@@ -62,7 +62,7 @@ impl CalendarSyncService {
         Ok(())
     }
 
-    pub async fn stop(&self) -> Result<(), CalendarError> {
+    pub async fn stop(&mut self) -> Result<(), CalendarError> {
         self.scheduler.shutdown().await
             .map_err(|e| CalendarError::ServiceUnavailable)?;
         
@@ -139,7 +139,7 @@ impl CalendarSyncService {
 
         // Save events to local cache
         let event_count = events.len() as u32;
-        self.repository.save_events(&events).await?;
+        self.repository.save_events(account_id, events).await?;
 
         info!("Synced {} events for account {}", event_count, account_id);
         Ok(event_count)
@@ -147,26 +147,34 @@ impl CalendarSyncService {
 
     async fn schedule_periodic_sync(&self) -> Result<(), CalendarError> {
         let repository = self.repository.clone();
-        let sync_service_weak = Arc::downgrade(&Arc::new(self));
+        let calendar_services = self.calendar_services.clone();
+        let event_emitter = self.event_emitter.clone();
 
         let job = Job::new_async("0 */15 * * * *", move |_uuid, _l| {
             let repository = repository.clone();
-            let sync_service_weak = sync_service_weak.clone();
+            let calendar_services = calendar_services.clone();
+            let event_emitter = event_emitter.clone();
             
             Box::pin(async move {
-                if let Some(sync_service) = sync_service_weak.upgrade() {
-                    match repository.get_active_accounts().await {
-                        Ok(accounts) => {
-                            for account in accounts {
-                                if let Some(account_id) = account.id {
-                                    if let Err(e) = sync_service.sync_account(account_id).await {
-                                        error!("Periodic sync failed for account {}: {}", account_id, e);
+                // Create a temporary sync service for this job
+                match CalendarSyncService::new(repository.clone(), event_emitter.clone()).await {
+                    Ok(mut sync_service) => {
+                        sync_service.calendar_services = calendar_services;
+                        
+                        match repository.get_active_accounts().await {
+                            Ok(accounts) => {
+                                for account in accounts {
+                                    if let Some(account_id) = account.id {
+                                        if let Err(e) = sync_service.sync_account(account_id).await {
+                                            error!("Periodic sync failed for account {}: {}", account_id, e);
+                                        }
                                     }
                                 }
                             }
+                            Err(e) => error!("Failed to get active accounts for sync: {}", e),
                         }
-                        Err(e) => error!("Failed to get active accounts for sync: {}", e),
                     }
+                    Err(e) => error!("Failed to create sync service: {}", e),
                 }
             })
         })

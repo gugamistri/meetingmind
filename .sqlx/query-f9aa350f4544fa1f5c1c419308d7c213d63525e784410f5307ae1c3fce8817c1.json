@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM calendar_events WHERE end_time < ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "f9aa350f4544fa1f5c1c419308d7c213d63525e784410f5307ae1c3fce8817c1"
+}

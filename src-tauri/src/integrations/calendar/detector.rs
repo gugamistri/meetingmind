@@ -58,10 +58,24 @@ impl MeetingDetector {
 
         info!("Starting meeting detection service");
 
-        let detector = Arc::new(self);
+        // Clone the necessary fields for the async task
+        let repository = self.repository.clone();
+        let event_emitter = self.event_emitter.clone();
+        let audio_service = self.audio_service.clone();
+        let config = self.config.clone();
+        let detected_meetings = self.detected_meetings.clone();
+        let is_running = self.is_running.clone();
         
         // Start the detection loop
         tokio::spawn(async move {
+            let detector = MeetingDetector {
+                repository,
+                event_emitter,
+                audio_service,
+                config,
+                detected_meetings,
+                is_running,
+            };
             detector.detection_loop().await;
         });
 

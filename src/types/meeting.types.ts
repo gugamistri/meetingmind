@@ -222,6 +222,60 @@ export const getGreetingForTime = (): DashboardGreeting => {
   }
 };
 
+// Detailed meeting data for the meeting detail view
+export interface DetailedMeeting extends Meeting {
+  readonly audioFilePath?: string;
+  readonly recordingSession?: MeetingRecordingSession;
+  readonly transcription?: DetailedTranscription;
+  readonly summaries?: Summary[];
+  readonly actionItems?: ActionItem[];
+  readonly insights?: MeetingInsight[];
+}
+
+// AI-generated summary data
+export interface Summary {
+  readonly id: string;
+  readonly meetingId: number;
+  readonly templateId?: number;
+  readonly templateName: string;
+  readonly content: string;
+  readonly modelUsed: string;
+  readonly provider: 'openai' | 'claude';
+  readonly costUsd?: number;
+  readonly tokenCount?: number;
+  readonly processingTimeMs: number;
+  readonly confidenceScore?: number;
+  readonly createdAt: Date;
+}
+
+// Action items extracted from meetings
+export interface ActionItem {
+  readonly id: number;
+  readonly meetingId: number;
+  readonly text: string;
+  readonly assignee?: string;
+  readonly dueDate?: Date;
+  readonly priority: 'low' | 'medium' | 'high';
+  readonly status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+// Meeting insights from AI analysis
+export interface MeetingInsight {
+  readonly id: number;
+  readonly meetingId: number;
+  readonly type: 'sentiment' | 'topic' | 'decision' | 'risk' | 'opportunity';
+  readonly title: string;
+  readonly description: string;
+  readonly confidence: number;
+  readonly metadata?: Record<string, any>;
+  readonly createdAt: Date;
+}
+
+// Import DetailedTranscription type (this will be used in DetailedMeeting)
+import type { DetailedTranscription } from './transcription.types';
+
 export default {
   MeetingStatus,
   ParticipantRole,

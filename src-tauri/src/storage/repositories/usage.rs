@@ -19,8 +19,12 @@ impl UsageRepository {
         Self { pool }
     }
     
-    /// Create a new usage record
     pub async fn create_usage_record(&self, record: &UsageRecord) -> Result<i64> {
+        let service_provider = record.service_provider.as_str();
+        let operation_type = record.operation_type.as_str();
+        let meeting_id_str = record.meeting_id.map(|id| id.to_string());
+        let summary_id_str = record.summary_id.map(|id| id.to_string());
+        
         let id = sqlx::query!(
             r#"
             INSERT INTO usage_records (
@@ -30,14 +34,14 @@ impl UsageRepository {
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
-            record.service_provider.as_str(),
-            record.operation_type.as_str(),
+            service_provider,
+            operation_type,
             record.model_name,
             record.input_tokens,
             record.output_tokens,
             record.cost_usd,
-            record.meeting_id.map(|id| id.to_string()),
-            record.summary_id.map(|id| id.to_string()),
+            meeting_id_str,
+            summary_id_str,
             record.created_at
         )
         .execute(&self.pool)
@@ -51,7 +55,6 @@ impl UsageRepository {
         Ok(id)
     }
     
-    /// Get usage records by date range
     pub async fn get_usage_by_date_range(
         &self,
         start_date: NaiveDate,
@@ -82,13 +85,13 @@ impl UsageRepository {
         let mut usage_records = Vec::new();
         for record in records {
             let provider = AIProvider::OpenAI; // Default, will be corrected below
-            let provider = match record.service_provider.as_str() {
+            let provider = match record.service_provider.as_deref().unwrap_or("openai") {
                 "openai" => AIProvider::OpenAI,
                 "claude" => AIProvider::Claude,
                 _ => provider,
             };
             
-            let operation_type = match record.operation_type.as_str() {
+            let operation_type = match record.operation_type.as_deref().unwrap_or("summarization") {
                 "summarization" => OperationType::Summarization,
                 "transcription" => OperationType::Transcription,
                 "insight_generation" => OperationType::InsightGeneration,
@@ -97,12 +100,14 @@ impl UsageRepository {
             };
             
             let meeting_id = record.meeting_id
-                .and_then(|id| Uuid::parse_str(&id).ok());
+                .as_ref()
+                .and_then(|id| Uuid::parse_str(id).ok());
             let summary_id = record.summary_id
-                .and_then(|id| Uuid::parse_str(&id).ok());
+                .as_ref()
+                .and_then(|id| Uuid::parse_str(id).ok());
             
             usage_records.push(UsageRecord {
-                id: record.id,
+                id: record.id.unwrap_or(0),
                 service_provider: provider,
                 operation_type,
                 model_name: record.model_name,
@@ -111,14 +116,13 @@ impl UsageRepository {
                 cost_usd: record.cost_usd,
                 meeting_id,
                 summary_id,
-                created_at: record.created_at,
+                created_at: record.created_at.and_then(|dt| Some(dt.and_utc())).unwrap_or_else(|| Utc::now()),
             });
         }
         
         Ok(usage_records)
     }
     
-    /// Get usage records by provider and date range
     pub async fn get_usage_by_provider_and_date_range(
         &self,
         provider: AIProvider,
@@ -151,7 +155,7 @@ impl UsageRepository {
         
         let mut usage_records = Vec::new();
         for record in records {
-            let operation_type = match record.operation_type.as_str() {
+            let operation_type = match record.operation_type.as_deref().unwrap_or("summarization") {
                 "summarization" => OperationType::Summarization,
                 "transcription" => OperationType::Transcription,
                 "insight_generation" => OperationType::InsightGeneration,
@@ -160,12 +164,14 @@ impl UsageRepository {
             };
             
             let meeting_id = record.meeting_id
-                .and_then(|id| Uuid::parse_str(&id).ok());
+                .as_ref()
+                .and_then(|id| Uuid::parse_str(id).ok());
             let summary_id = record.summary_id
-                .and_then(|id| Uuid::parse_str(&id).ok());
+                .as_ref()
+                .and_then(|id| Uuid::parse_str(id).ok());
             
             usage_records.push(UsageRecord {
-                id: record.id,
+                id: record.id.unwrap_or(0),
                 service_provider: provider,
                 operation_type,
                 model_name: record.model_name,
@@ -174,7 +180,7 @@ impl UsageRepository {
                 cost_usd: record.cost_usd,
                 meeting_id,
                 summary_id,
-                created_at: record.created_at,
+                created_at: record.created_at.and_then(|dt| Some(dt.and_utc())).unwrap_or_else(|| Utc::now()),
             });
         }
         
@@ -262,15 +268,14 @@ impl UsageRepository {
             result.push(ProviderBreakdown {
                 provider,
                 operation_count: record.operation_count as u32,
-                total_cost: record.total_cost.unwrap_or(0.0),
-                avg_cost: record.avg_cost.unwrap_or(0.0),
+                total_cost: record.total_cost,
+                avg_cost: record.avg_cost,
             });
         }
         
         Ok(result)
     }
     
-    /// Get recent usage records for a meeting
     pub async fn get_usage_by_meeting(
         &self,
         meeting_id: Uuid,
@@ -298,13 +303,13 @@ impl UsageRepository {
         
         let mut usage_records = Vec::new();
         for record in records {
-            let provider = match record.service_provider.as_str() {
+            let provider = match record.service_provider.as_deref().unwrap_or("openai") {
                 "openai" => AIProvider::OpenAI,
                 "claude" => AIProvider::Claude,
                 _ => continue,
             };
             
-            let operation_type = match record.operation_type.as_str() {
+            let operation_type = match record.operation_type.as_deref().unwrap_or("summarization") {
                 "summarization" => OperationType::Summarization,
                 "transcription" => OperationType::Transcription,
                 "insight_generation" => OperationType::InsightGeneration,
@@ -313,12 +318,14 @@ impl UsageRepository {
             };
             
             let meeting_id = record.meeting_id
-                .and_then(|id| Uuid::parse_str(&id).ok());
+                .as_ref()
+                .and_then(|id| Uuid::parse_str(id).ok());
             let summary_id = record.summary_id
-                .and_then(|id| Uuid::parse_str(&id).ok());
+                .as_ref()
+                .and_then(|id| Uuid::parse_str(id).ok());
             
             usage_records.push(UsageRecord {
-                id: record.id,
+                id: record.id.unwrap_or(0),
                 service_provider: provider,
                 operation_type,
                 model_name: record.model_name,
@@ -327,7 +334,7 @@ impl UsageRepository {
                 cost_usd: record.cost_usd,
                 meeting_id,
                 summary_id,
-                created_at: record.created_at,
+                created_at: record.created_at.and_then(|dt| Some(dt.and_utc())).unwrap_or_else(|| Utc::now()),
             });
         }
         

@@ -35,11 +35,12 @@ pub enum AppError {
 }
 
 /// Comprehensive error type for better error handling
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Serialize)]
 pub enum Error {
     #[error("Configuration error: {message}")]
     Configuration {
         message: String,
+        #[serde(skip)]
         #[source]
         source: Option<Box<dyn std::error::Error + Send + Sync>>,
     },
@@ -47,6 +48,7 @@ pub enum Error {
     #[error("Database error: {message}")]
     Database {
         message: String,
+        #[serde(skip)]
         #[source]
         source: Option<Box<dyn std::error::Error + Send + Sync>>,
     },
@@ -54,6 +56,7 @@ pub enum Error {
     #[error("Audio error: {message}")]
     Audio {
         message: String,
+        #[serde(skip)]
         #[source]
         source: Option<Box<dyn std::error::Error + Send + Sync>>,
     },
@@ -61,6 +64,7 @@ pub enum Error {
     #[error("Transcription error: {message}")]
     Transcription {
         message: String,
+        #[serde(skip)]
         #[source]
         source: Option<Box<dyn std::error::Error + Send + Sync>>,
     },
@@ -69,6 +73,7 @@ pub enum Error {
     AIService {
         provider: String,
         message: String,
+        #[serde(skip)]
         #[source]
         source: Option<Box<dyn std::error::Error + Send + Sync>>,
     },
@@ -83,6 +88,7 @@ pub enum Error {
     #[error("HTTP error: {message}")]
     Http {
         message: String,
+        #[serde(skip)]
         #[source]
         source: Box<dyn std::error::Error + Send + Sync>,
     },
@@ -90,6 +96,7 @@ pub enum Error {
     #[error("IO error: {message}")]
     Io {
         message: String,
+        #[serde(skip)]
         #[source]
         source: Option<Box<dyn std::error::Error + Send + Sync>>,
     },
@@ -97,6 +104,7 @@ pub enum Error {
     #[error("Internal error: {message}")]
     Internal {
         message: String,
+        #[serde(skip)]
         #[source]
         source: Option<Box<dyn std::error::Error + Send + Sync>>,
     },

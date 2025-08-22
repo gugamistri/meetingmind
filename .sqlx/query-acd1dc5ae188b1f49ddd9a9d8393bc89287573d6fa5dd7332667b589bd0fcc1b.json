@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT encrypted_access_token, encrypted_refresh_token, token_expires_at\n            FROM calendar_accounts \n            WHERE id = ? AND is_active = TRUE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "encrypted_access_token",
+        "ordinal": 0,
+        "type_info": "Blob"
+      },
+      {
+        "name": "encrypted_refresh_token",
+        "ordinal": 1,
+        "type_info": "Blob"
+      },
+      {
+        "name": "token_expires_at",
+        "ordinal": 2,
+        "type_info": "Datetime"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "acd1dc5ae188b1f49ddd9a9d8393bc89287573d6fa5dd7332667b589bd0fcc1b"
+}

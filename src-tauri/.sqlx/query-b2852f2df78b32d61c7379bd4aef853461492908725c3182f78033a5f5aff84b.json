@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            UPDATE calendar_accounts \n            SET encrypted_access_token = ?, encrypted_refresh_token = ?, token_expires_at = ?, updated_at = CURRENT_TIMESTAMP\n            WHERE id = ?\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "b2852f2df78b32d61c7379bd4aef853461492908725c3182f78033a5f5aff84b"
+}

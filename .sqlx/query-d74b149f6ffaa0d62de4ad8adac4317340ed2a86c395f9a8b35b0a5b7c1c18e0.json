@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT id, provider, account_email, is_active, auto_start_enabled, created_at, updated_at\n            FROM calendar_accounts \n            WHERE is_active = TRUE\n            ORDER BY created_at ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Int64"
+      },
+      {
+        "name": "provider",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "account_email",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "is_active",
+        "ordinal": 3,
+        "type_info": "Bool"
+      },
+      {
+        "name": "auto_start_enabled",
+        "ordinal": 4,
+        "type_info": "Bool"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 5,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 6,
+        "type_info": "Datetime"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "d74b149f6ffaa0d62de4ad8adac4317340ed2a86c395f9a8b35b0a5b7c1c18e0"
+}

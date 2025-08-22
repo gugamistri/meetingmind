@@ -59,60 +59,75 @@ impl SummaryRepository {
         Ok(())
     }
     
-    /// Get a summary by ID
     pub async fn get_summary_by_id(&self, id: Uuid) -> Result<Option<SummaryResult>> {
+        let id_str = id.to_string();
         let record = sqlx::query!(
             r#"
             SELECT id, meeting_id, template_id, content, model_used, provider,
                    cost_usd, processing_time_ms, token_count, confidence_score,
-                   created_at
-            FROM summaries
+                   created_at, updated_at
+            FROM summaries 
             WHERE id = ?
             "#,
-            id.to_string()
+            id_str
         )
         .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| crate::error::Error::Database {
-            message: format!("Failed to fetch summary: {}", e),
-            source: Some(e.into()),
-        })?;
+        .await?;
         
         if let Some(record) = record {
-            let provider = match record.provider.as_str() {
+            let provider: AIProvider = match record.provider.as_str() {
                 "openai" => AIProvider::OpenAI,
                 "claude" => AIProvider::Claude,
                 _ => AIProvider::OpenAI, // Default
             };
             
+            let id = record.id.as_ref()
+                .ok_or_else(|| crate::error::Error::Database {
+                    message: "Summary ID cannot be null".to_string(),
+                    source: None,
+                })?;
+            let meeting_id = record.meeting_id.as_ref()
+                .ok_or_else(|| crate::error::Error::Database {
+                    message: "Meeting ID cannot be null".to_string(),
+                    source: None,
+                })?;
+            let content = record.content.as_ref()
+                .ok_or_else(|| crate::error::Error::Database {
+                    message: "Content cannot be null".to_string(),
+                    source: None,
+                })?;
+            let model_used = record.model_used.as_ref()
+                .ok_or_else(|| crate::error::Error::Database {
+                    message: "Model used cannot be null".to_string(),
+                    source: None,
+                })?;
+            
             Ok(Some(SummaryResult {
-                id: Uuid::parse_str(&record.id).map_err(|e| crate::error::Error::Database {
+                id: Uuid::parse_str(id).map_err(|e| crate::error::Error::Database {
                     message: format!("Invalid UUID format for summary ID: {}", e),
                     source: Some(e.into()),
                 })?,
-                meeting_id: Uuid::parse_str(&record.meeting_id).map_err(|e| crate::error::Error::Database {
+                meeting_id: Uuid::parse_str(meeting_id).map_err(|e| crate::error::Error::Database {
                     message: format!("Invalid UUID format for meeting ID: {}", e),
                     source: Some(e.into()),
                 })?,
                 template_id: record.template_id,
-                content: record.content,
-                model_used: record.model_used,
+                content: content.clone(),
+                model_used: model_used.clone(),
                 provider,
                 cost_usd: record.cost_usd,
                 processing_time_ms: record.processing_time_ms as u64,
                 token_count: record.token_count.map(|t| t as u32),
                 confidence_score: record.confidence_score.map(|s| s as f32),
-                created_at: DateTime::<Utc>::from_naive_utc_and_offset(
-                    record.created_at.unwrap_or_else(|| NaiveDateTime::from_timestamp_opt(0, 0).unwrap().unwrap()),
-                    Utc
-                ),
+                created_at: record.created_at
+                    .and_then(|dt| Some(dt.and_utc()))
+                    .unwrap_or_else(|| Utc::now()),
             }))
         } else {
             Ok(None)
         }
     }
     
-    /// Get summaries for a meeting
     pub async fn get_summaries_by_meeting(&self, meeting_id: Uuid) -> Result<Vec<SummaryResult>> {
         let records = sqlx::query!(
             r#"
@@ -134,31 +149,38 @@ impl SummaryRepository {
         
         let mut summaries = Vec::new();
         for record in records {
-            let provider = match record.provider.as_str() {
+            let provider: AIProvider = match record.provider.as_str() {
                 "openai" => AIProvider::OpenAI,
                 "claude" => AIProvider::Claude,
                 _ => AIProvider::OpenAI,
             };
             
+            let (id, meeting_id, content, model_used) = 
+                (&record.id, &record.meeting_id, &record.content, &record.model_used);
             summaries.push(SummaryResult {
-                id: Uuid::parse_str(&record.id).unwrap(),
-                meeting_id: Uuid::parse_str(&record.meeting_id).unwrap(),
-                template_id: record.template_id,
-                content: record.content,
-                model_used: record.model_used,
-                provider,
-                cost_usd: record.cost_usd,
-                processing_time_ms: record.processing_time_ms as u64,
-                token_count: record.token_count.map(|t| t as u32),
-                confidence_score: record.confidence_score,
-                created_at: record.created_at,
-            });
+                    id: Uuid::parse_str(id.as_ref()).map_err(|e| crate::error::Error::Database {
+                        message: format!("Invalid UUID format for summary ID: {}", e),
+                        source: Some(e.into()),
+                    })?,
+                    meeting_id: Uuid::parse_str(meeting_id.as_ref()).map_err(|e| crate::error::Error::Database {
+                        message: format!("Invalid UUID format for meeting ID: {}", e),
+                        source: Some(e.into()),
+                    })?,
+                    template_id: record.template_id,
+                    content: content.clone(),
+                    model_used: model_used.clone(),
+                    provider,
+                    cost_usd: record.cost_usd,
+                    processing_time_ms: record.processing_time_ms as u64,
+                    token_count: record.token_count.map(|t| t as u32),
+                    confidence_score: record.confidence_score.map(|s| s as f32),
+                created_at: record.created_at.map(|dt| dt.and_utc()).unwrap_or_else(|| Utc::now()),
+                });
         }
         
         Ok(summaries)
     }
     
-    /// Search summaries by content
     pub async fn search_summaries(&self, query: &str, limit: u32) -> Result<Vec<SummaryResult>> {
         let records = sqlx::query!(
             r#"
@@ -183,25 +205,33 @@ impl SummaryRepository {
         
         let mut summaries = Vec::new();
         for record in records {
-            let provider = match record.provider.as_str() {
+            let provider: AIProvider = match record.provider.as_str() {
                 "openai" => AIProvider::OpenAI,
                 "claude" => AIProvider::Claude,
                 _ => AIProvider::OpenAI,
             };
             
+            let (id, meeting_id, content, model_used) = 
+                (&record.id, &record.meeting_id, &record.content, &record.model_used);
             summaries.push(SummaryResult {
-                id: Uuid::parse_str(&record.id).unwrap(),
-                meeting_id: Uuid::parse_str(&record.meeting_id).unwrap(),
-                template_id: record.template_id,
-                content: record.content,
-                model_used: record.model_used,
-                provider,
-                cost_usd: record.cost_usd,
-                processing_time_ms: record.processing_time_ms as u64,
-                token_count: record.token_count.map(|t| t as u32),
-                confidence_score: record.confidence_score,
-                created_at: record.created_at,
-            });
+                    id: Uuid::parse_str(id.as_ref()).map_err(|e| crate::error::Error::Database {
+                        message: format!("Invalid UUID format for summary ID: {}", e),
+                        source: Some(e.into()),
+                    })?,
+                    meeting_id: Uuid::parse_str(meeting_id.as_ref()).map_err(|e| crate::error::Error::Database {
+                        message: format!("Invalid UUID format for meeting ID: {}", e),
+                        source: Some(e.into()),
+                    })?,
+                    template_id: record.template_id,
+                    content: content.clone(),
+                    model_used: model_used.clone(),
+                    provider,
+                    cost_usd: record.cost_usd,
+                    processing_time_ms: record.processing_time_ms as u64,
+                    token_count: record.token_count.map(|t| t as u32),
+                    confidence_score: record.confidence_score.map(|s| s as f32),
+                created_at: record.created_at.map(|dt| dt.and_utc()).unwrap_or_else(|| Utc::now()),
+                });
         }
         
         Ok(summaries)
@@ -209,6 +239,7 @@ impl SummaryRepository {
     
     /// Update a summary
     pub async fn update_summary(&self, summary: &SummaryResult) -> Result<()> {
+        let summary_id_str = summary.id.to_string();
         sqlx::query!(
             r#"
             UPDATE summaries
@@ -216,7 +247,7 @@ impl SummaryRepository {
             WHERE id = ?
             "#,
             summary.content,
-            summary.id.to_string()
+            summary_id_str
         )
         .execute(&self.pool)
         .await
@@ -230,9 +261,10 @@ impl SummaryRepository {
     
     /// Delete a summary
     pub async fn delete_summary(&self, id: Uuid) -> Result<()> {
+        let id_str = id.to_string();
         sqlx::query!(
             "DELETE FROM summaries WHERE id = ?",
-            id.to_string()
+            id_str
         )
         .execute(&self.pool)
         .await
@@ -244,7 +276,6 @@ impl SummaryRepository {
         Ok(())
     }
     
-    /// Get recent summaries
     pub async fn get_recent_summaries(&self, limit: u32) -> Result<Vec<SummaryResult>> {
         let records = sqlx::query!(
             r#"
@@ -266,25 +297,33 @@ impl SummaryRepository {
         
         let mut summaries = Vec::new();
         for record in records {
-            let provider = match record.provider.as_str() {
+            let provider: AIProvider = match record.provider.as_str() {
                 "openai" => AIProvider::OpenAI,
                 "claude" => AIProvider::Claude,
                 _ => AIProvider::OpenAI,
             };
             
+            let (id, meeting_id, content, model_used) = 
+                (&record.id, &record.meeting_id, &record.content, &record.model_used);
             summaries.push(SummaryResult {
-                id: Uuid::parse_str(&record.id).unwrap(),
-                meeting_id: Uuid::parse_str(&record.meeting_id).unwrap(),
-                template_id: record.template_id,
-                content: record.content,
-                model_used: record.model_used,
-                provider,
-                cost_usd: record.cost_usd,
-                processing_time_ms: record.processing_time_ms as u64,
-                token_count: record.token_count.map(|t| t as u32),
-                confidence_score: record.confidence_score,
-                created_at: record.created_at,
-            });
+                    id: Uuid::parse_str(id.as_ref()).map_err(|e| crate::error::Error::Database {
+                        message: format!("Invalid UUID format for summary ID: {}", e),
+                        source: Some(e.into()),
+                    })?,
+                    meeting_id: Uuid::parse_str(meeting_id.as_ref()).map_err(|e| crate::error::Error::Database {
+                        message: format!("Invalid UUID format for meeting ID: {}", e),
+                        source: Some(e.into()),
+                    })?,
+                    template_id: record.template_id,
+                    content: content.clone(),
+                    model_used: model_used.clone(),
+                    provider,
+                    cost_usd: record.cost_usd,
+                    processing_time_ms: record.processing_time_ms as u64,
+                    token_count: record.token_count.map(|t| t as u32),
+                    confidence_score: record.confidence_score.map(|s| s as f32),
+                created_at: record.created_at.map(|dt| dt.and_utc()).unwrap_or_else(|| Utc::now()),
+                });
         }
         
         Ok(summaries)
@@ -305,6 +344,7 @@ impl TemplateRepository {
     
     /// Create a new template
     pub async fn create_template(&self, template: &SummaryTemplate) -> Result<i64> {
+        let meeting_type_str = template.meeting_type.as_str();
         let id = sqlx::query!(
             r#"
             INSERT INTO summary_templates (
@@ -316,7 +356,7 @@ impl TemplateRepository {
             template.name,
             template.description,
             template.prompt_template,
-            template.meeting_type.as_str(),
+            meeting_type_str,
             template.is_default,
             template.created_at,
             template.updated_at
@@ -332,7 +372,6 @@ impl TemplateRepository {
         Ok(id)
     }
     
-    /// Get a template by ID
     pub async fn get_template_by_id(&self, id: i64) -> Result<Option<SummaryTemplate>> {
         let record = sqlx::query!(
             r#"
@@ -351,25 +390,44 @@ impl TemplateRepository {
         })?;
         
         if let Some(record) = record {
-            let meeting_type = MeetingType::from_str(&record.meeting_type)
+            let meeting_type_str = record.meeting_type.as_ref()
+                .ok_or_else(|| crate::error::Error::Database {
+                    message: "Meeting type cannot be null".to_string(),
+                    source: None,
+                })?;
+            let meeting_type = MeetingType::from_str(meeting_type_str)
                 .unwrap_or(MeetingType::Custom);
+            
+            let name = record.name.as_ref()
+                .ok_or_else(|| crate::error::Error::Database {
+                    message: "Template name cannot be null".to_string(),
+                    source: None,
+                })?;
+            let prompt_template = record.prompt_template.as_ref()
+                .ok_or_else(|| crate::error::Error::Database {
+                    message: "Prompt template cannot be null".to_string(),
+                    source: None,
+                })?;
             
             Ok(Some(SummaryTemplate {
                 id: record.id,
-                name: record.name,
-                description: record.description,
-                prompt_template: record.prompt_template,
+                name: name.clone(),
+                description: record.description.clone(),
+                prompt_template: prompt_template.clone(),
                 meeting_type,
-                is_default: record.is_default,
-                created_at: record.created_at,
-                updated_at: record.updated_at,
+                is_default: record.is_default.unwrap_or(false),
+                created_at: record.created_at
+                    .and_then(|dt| Some(dt.and_utc()))
+                    .unwrap_or_else(|| Utc::now()),
+                updated_at: record.updated_at
+                    .and_then(|dt| Some(dt.and_utc()))
+                    .unwrap_or_else(|| Utc::now()),
             }))
         } else {
             Ok(None)
         }
     }
     
-    /// Get all templates
     pub async fn get_all_templates(&self) -> Result<Vec<SummaryTemplate>> {
         let records = sqlx::query!(
             r#"
@@ -388,25 +446,30 @@ impl TemplateRepository {
         
         let mut templates = Vec::new();
         for record in records {
-            let meeting_type = MeetingType::from_str(&record.meeting_type)
+            let (name, prompt_template, meeting_type_str) = 
+                (&record.name, &record.prompt_template, &record.meeting_type);
+            let meeting_type = MeetingType::from_str(meeting_type_str)
                 .unwrap_or(MeetingType::Custom);
             
             templates.push(SummaryTemplate {
                 id: record.id,
-                name: record.name,
-                description: record.description,
-                prompt_template: record.prompt_template,
+                name: name.clone(),
+                description: record.description.clone(),
+                prompt_template: prompt_template.clone(),
                 meeting_type,
-                is_default: record.is_default,
-                created_at: record.created_at,
-                updated_at: record.updated_at,
-            });
+                is_default: record.is_default.unwrap_or(false),
+                created_at: record.created_at
+                        .and_then(|dt| Some(dt.and_utc()))
+                        .unwrap_or_else(|| Utc::now()),
+                updated_at: record.updated_at
+                        .and_then(|dt| Some(dt.and_utc()))
+                        .unwrap_or_else(|| Utc::now()),
+                });
         }
         
         Ok(templates)
     }
     
-    /// Get templates by meeting type
     pub async fn get_templates_by_type(&self, meeting_type: MeetingType) -> Result<Vec<SummaryTemplate>> {
         let records = sqlx::query!(
             r#"
@@ -427,16 +490,22 @@ impl TemplateRepository {
         
         let mut templates = Vec::new();
         for record in records {
+            let (name, prompt_template) = 
+                (&record.name, &record.prompt_template);
             templates.push(SummaryTemplate {
                 id: record.id,
-                name: record.name,
-                description: record.description,
-                prompt_template: record.prompt_template,
-                meeting_type,
-                is_default: record.is_default,
-                created_at: record.created_at,
-                updated_at: record.updated_at,
-            });
+                name: name.clone(),
+                description: record.description.clone(),
+                prompt_template: prompt_template.clone(),
+                    meeting_type,
+                    is_default: record.is_default.unwrap_or(false),
+                created_at: record.created_at
+                        .and_then(|dt| Some(dt.and_utc()))
+                        .unwrap_or_else(|| Utc::now()),
+                updated_at: record.updated_at
+                        .and_then(|dt| Some(dt.and_utc()))
+                        .unwrap_or_else(|| Utc::now()),
+                });
         }
         
         Ok(templates)
@@ -444,6 +513,7 @@ impl TemplateRepository {
     
     /// Update a template
     pub async fn update_template(&self, template: &SummaryTemplate) -> Result<()> {
+        let meeting_type_str = template.meeting_type.as_str();
         sqlx::query!(
             r#"
             UPDATE summary_templates
@@ -454,7 +524,7 @@ impl TemplateRepository {
             template.name,
             template.description,
             template.prompt_template,
-            template.meeting_type.as_str(),
+            meeting_type_str,
             template.is_default,
             template.id
         )
@@ -484,7 +554,6 @@ impl TemplateRepository {
         Ok(())
     }
     
-    /// Get default template for a meeting type
     pub async fn get_default_template(&self, meeting_type: MeetingType) -> Result<Option<SummaryTemplate>> {
         let record = sqlx::query!(
             r#"
@@ -504,16 +573,25 @@ impl TemplateRepository {
         })?;
         
         if let Some(record) = record {
-            Ok(Some(SummaryTemplate {
-                id: record.id,
-                name: record.name,
-                description: record.description,
-                prompt_template: record.prompt_template,
-                meeting_type,
-                is_default: record.is_default,
-                created_at: record.created_at,
-                updated_at: record.updated_at,
-            }))
+            if let (Some(name), Some(prompt_template)) = 
+                (&record.name, &record.prompt_template) {
+                Ok(Some(SummaryTemplate {
+                    id: record.id.unwrap_or(0),
+                    name: name.clone(),
+                    description: record.description.clone(),
+                    prompt_template: prompt_template.clone(),
+                    meeting_type,
+                    is_default: record.is_default.unwrap_or(false),
+                created_at: record.created_at
+                        .and_then(|dt| Some(dt.and_utc()))
+                        .unwrap_or_else(|| Utc::now()),
+                updated_at: record.updated_at
+                        .and_then(|dt| Some(dt.and_utc()))
+                        .unwrap_or_else(|| Utc::now()),
+                }))
+            } else {
+                Ok(None)
+            }
         } else {
             Ok(None)
         }

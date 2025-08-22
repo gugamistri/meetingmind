@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE calendar_accounts SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "f0e46a3a4b9e35740c1e0708da05df1d0886ff9a42b4de6d3b2bcfd8de3091df"
+}

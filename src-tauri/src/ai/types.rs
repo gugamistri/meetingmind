@@ -49,7 +49,7 @@ pub struct CostEstimate {
 }
 
 /// Type of AI operation being performed
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum OperationType {
     Summarization,
     Transcription,

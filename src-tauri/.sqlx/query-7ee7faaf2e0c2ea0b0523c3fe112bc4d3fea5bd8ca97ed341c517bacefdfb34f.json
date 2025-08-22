@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT id, name, description, prompt_template, meeting_type,\n                   is_default, created_at, updated_at\n            FROM summary_templates\n            WHERE meeting_type = ? AND is_default = TRUE\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Int64"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "description",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "prompt_template",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "meeting_type",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "is_default",
+        "ordinal": 5,
+        "type_info": "Bool"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 6,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 7,
+        "type_info": "Datetime"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "7ee7faaf2e0c2ea0b0523c3fe112bc4d3fea5bd8ca97ed341c517bacefdfb34f"
+}

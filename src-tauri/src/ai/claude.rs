@@ -2,6 +2,7 @@
 
 use async_trait::async_trait;
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
+use secrecy::ExposeSecret;
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 use uuid::Uuid;
@@ -50,7 +51,7 @@ impl ClaudeClient {
             HeaderValue::from_str(auth_value)
                 .map_err(|e| Error::Configuration {
                     message: "Invalid API key format".to_string(),
-                    source: e.into(),
+                    source: Some(Box::new(e)),
                 })?,
         );
         
@@ -85,7 +86,7 @@ impl ClaudeClient {
                             .map_err(|e| Error::AIService {
                                 provider: "claude".to_string(),
                                 message: format!("Failed to parse response: {}", e),
-                                source: e.into(),
+                                source: Some(Box::new(e)),
                             });
                     } else if status == 429 {
                         // Rate limited, wait and retry
@@ -106,7 +107,7 @@ impl ClaudeClient {
                     last_error = Some(Error::AIService {
                         provider: "claude".to_string(),
                         message: format!("Request failed: {}", e),
-                        source: e.into(),
+                        source: Some(Box::new(e)),
                     });
                 }
             }
@@ -285,7 +286,7 @@ impl AIServiceClient for ClaudeClient {
             Err(e) => Err(Error::AIService {
                 provider: "claude".to_string(),
                 message: format!("Failed to get rate limit status: {}", e),
-                source: e.into(),
+                source: Some(Box::new(e)),
             }),
         }
     }

@@ -103,7 +103,8 @@ impl TemplateManager {
         template: &SummaryTemplate,
         sample_context: Option<&TemplateContext>,
     ) -> Result<TemplatePreview> {
-        let context = sample_context.unwrap_or(&self.get_sample_context());
+        let default_context = self.get_sample_context();
+        let context = sample_context.unwrap_or(&default_context);
         
         let processed = self.process_template(template, context).await?;
         let variables = self.extract_variables(&template.prompt_template);

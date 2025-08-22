@@ -1,0 +1,80 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT s.id, s.meeting_id, s.template_id, s.content, s.model_used, s.provider,\n                   s.cost_usd, s.processing_time_ms, s.token_count, s.confidence_score,\n                   s.created_at\n            FROM summaries s\n            JOIN summaries_fts ON summaries_fts.rowid = s.rowid\n            WHERE summaries_fts MATCH ?\n            ORDER BY rank\n            LIMIT ?\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "meeting_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "template_id",
+        "ordinal": 2,
+        "type_info": "Int64"
+      },
+      {
+        "name": "content",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "model_used",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "provider",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "cost_usd",
+        "ordinal": 6,
+        "type_info": "Float"
+      },
+      {
+        "name": "processing_time_ms",
+        "ordinal": 7,
+        "type_info": "Int64"
+      },
+      {
+        "name": "token_count",
+        "ordinal": 8,
+        "type_info": "Int64"
+      },
+      {
+        "name": "confidence_score",
+        "ordinal": 9,
+        "type_info": "Float"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 10,
+        "type_info": "Datetime"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "0e375c14ee3c2244e1fcfa2513774a9bb4c382843e88882b65ba773aa2e1ff74"
+}

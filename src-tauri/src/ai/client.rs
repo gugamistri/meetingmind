@@ -27,7 +27,7 @@ pub trait AIServiceClient: Send + Sync {
 }
 
 /// Rate limiting status information
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct RateLimitStatus {
     pub requests_remaining: Option<u32>,
     pub tokens_remaining: Option<u32>,
