@@ -5,6 +5,22 @@
  * between frontend and backend via Tauri commands.
  */
 
+// Audio permission status interface
+export interface AudioPermissionStatus {
+  microphoneAllowed: boolean;
+  systemAudioAllowed: boolean;
+  needsPermissionRequest: boolean;
+  permissionMessage?: string;
+}
+
+// Audio permission error types
+export enum AudioPermissionError {
+  MICROPHONE_DENIED = 'microphone_denied',
+  SYSTEM_AUDIO_DENIED = 'system_audio_denied',
+  PERMISSION_REQUEST_FAILED = 'permission_request_failed',
+  PLATFORM_NOT_SUPPORTED = 'platform_not_supported',
+}
+
 // Audio device types
 export interface AudioDevice {
   name: string;

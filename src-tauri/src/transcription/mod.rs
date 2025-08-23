@@ -28,6 +28,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// Main transcription service coordinating all transcription operations
+#[derive(Clone)]
 pub struct TranscriptionService {
     pipeline: Arc<RwLock<TranscriptionPipeline>>,
     model_manager: Arc<ModelManager>,
@@ -38,7 +39,21 @@ impl TranscriptionService {
     pub async fn new() -> Result<Self> {
         let model_manager = Arc::new(ModelManager::new().await?);
         let pipeline = Arc::new(RwLock::new(
-            TranscriptionPipeline::new(model_manager.clone()).await?
+            TranscriptionPipeline::new(model_manager.clone(), None).await?
+        ));
+        
+        Ok(Self {
+            pipeline,
+            model_manager,
+        })
+    }
+    
+    /// Create a new transcription service with database integration
+    pub async fn new_with_repository(pool: crate::storage::DatabasePool) -> Result<Self> {
+        let model_manager = Arc::new(ModelManager::new().await?);
+        let repository = crate::storage::repositories::transcription::TranscriptionRepository::new(pool);
+        let pipeline = Arc::new(RwLock::new(
+            TranscriptionPipeline::new(model_manager.clone(), Some(repository)).await?
         ));
         
         Ok(Self {

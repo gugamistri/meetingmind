@@ -10,10 +10,34 @@
   },
   "app": {
     "security": {
-      "csp": null
+      "csp": null,
+      "capabilities": [
+        {
+          "identifier": "main-capability",
+          "description": "Main application permissions",
+          "local": true,
+          "windows": ["main"],
+          "permissions": [
+            "core:event:allow-listen",
+            "core:event:allow-unlisten",
+            "core:event:allow-emit",
+            "core:event:default",
+            "core:window:default",
+            "core:window:allow-set-title",
+            "core:window:allow-close",
+            "core:window:allow-minimize",
+            "core:window:allow-show",
+            "core:window:allow-hide",
+            "core:path:default",
+            "core:app:default",
+            "shell:allow-open"
+          ]
+        }
+      ]
     },
     "windows": [
       {
+        "label": "main",
         "fullscreen": false,
         "height": 800,
         "minHeight": 600,

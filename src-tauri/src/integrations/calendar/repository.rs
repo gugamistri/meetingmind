@@ -28,10 +28,7 @@ impl CalendarRepository {
         .await?;
 
         if let Some(row) = row {
-            let provider_str = match row.provider {
-                Some(p) => p,
-                None => return Ok(None), // If provider is null, skip this account
-            };
+            let provider_str = row.provider;
             
             Ok(Some(CalendarAccount {
                 id: Some(row.id),
@@ -41,8 +38,7 @@ impl CalendarRepository {
                 auto_start_enabled: row.auto_start_enabled.unwrap_or(false),
                 created_at: row.created_at.map(|dt| dt.and_utc()).unwrap_or_else(|| Utc::now()),
                 updated_at: row.updated_at
-                    .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                    .map(|dt| dt.with_timezone(&Utc))
+                    .map(|dt| dt.and_utc())
                     .unwrap_or_else(|| Utc::now()),
             }))
         } else {
@@ -64,8 +60,8 @@ impl CalendarRepository {
 
         let mut accounts = Vec::new();
         for row in rows {
-            if let Some(provider_str) = row.provider {
-                accounts.push(CalendarAccount {
+            let provider_str = row.provider;
+            accounts.push(CalendarAccount {
                     id: Some(row.id),
                     provider: provider_str.parse()?,
                     account_email: row.account_email,
@@ -73,11 +69,9 @@ impl CalendarRepository {
                     auto_start_enabled: row.auto_start_enabled.unwrap_or(false),
                     created_at: row.created_at.map(|dt| dt.and_utc()).unwrap_or_else(|| Utc::now()),
                     updated_at: row.updated_at
-                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                        .map(|dt| dt.with_timezone(&Utc))
+                        .map(|dt| dt.and_utc())
                         .unwrap_or_else(|| Utc::now()),
                 });
-            }
         }
 
         Ok(accounts)
@@ -175,8 +169,10 @@ impl CalendarRepository {
         let now_str = now.to_rfc3339();
         let end_time_str = end_time.to_rfc3339();
 
-        let rows = if let Some(account_id) = account_id {
-            sqlx::query!(
+        let mut events = Vec::new();
+
+        if let Some(account_id) = account_id {
+            let rows = sqlx::query!(
                 r#"
                 SELECT id, calendar_account_id, external_event_id, title, description, 
                        start_time, end_time, participants, location, meeting_url, 
@@ -190,9 +186,29 @@ impl CalendarRepository {
                 end_time_str
             )
             .fetch_all(&self.pool)
-            .await?
+            .await?;
+
+            for row in rows {
+                let participants: Vec<String> = serde_json::from_str(row.participants.as_deref().unwrap_or("[]"))?;
+                
+                events.push(CalendarEvent {
+                    id: row.id,
+                    calendar_account_id: row.calendar_account_id,
+                    external_event_id: row.external_event_id,
+                    title: row.title,
+                    description: row.description,
+                    start_time: row.start_time.and_utc(),
+                    end_time: row.end_time.and_utc(),
+                    participants,
+                    location: row.location,
+                    meeting_url: row.meeting_url,
+                    is_accepted: row.is_accepted.unwrap_or(false),
+                    last_modified: row.last_modified.map(|lm| lm.and_utc()),
+                    created_at: row.created_at.map(|dt| dt.and_utc()).unwrap_or_else(|| Utc::now()),
+                });
+            }
         } else {
-            sqlx::query!(
+            let rows = sqlx::query!(
                 r#"
                 SELECT id, calendar_account_id, external_event_id, title, description, 
                        start_time, end_time, participants, location, meeting_url, 
@@ -205,28 +221,27 @@ impl CalendarRepository {
                 end_time_str
             )
             .fetch_all(&self.pool)
-            .await?
-        };
+            .await?;
 
-        let mut events = Vec::new();
-        for row in rows {
-            let participants: Vec<String> = serde_json::from_str(row.participants.as_deref().unwrap_or("[]"))?;
-            
-            events.push(CalendarEvent {
-                id: row.id,
-                calendar_account_id: row.calendar_account_id,
-                external_event_id: row.external_event_id,
-                title: row.title,
-                description: row.description,
-                start_time: row.start_time.and_utc(),
-                end_time: row.end_time.and_utc(),
-                participants,
-                location: row.location,
-                meeting_url: row.meeting_url,
-                is_accepted: row.is_accepted.unwrap_or(false),
-                last_modified: row.last_modified.map(|lm| lm.and_utc()),
-                created_at: row.created_at.map(|dt| dt.and_utc()).unwrap_or_else(|| Utc::now()),
-            });
+            for row in rows {
+                let participants: Vec<String> = serde_json::from_str(row.participants.as_deref().unwrap_or("[]"))?;
+                
+                events.push(CalendarEvent {
+                    id: row.id,
+                    calendar_account_id: row.calendar_account_id,
+                    external_event_id: row.external_event_id,
+                    title: row.title,
+                    description: row.description,
+                    start_time: row.start_time.and_utc(),
+                    end_time: row.end_time.and_utc(),
+                    participants,
+                    location: row.location,
+                    meeting_url: row.meeting_url,
+                    is_accepted: row.is_accepted.unwrap_or(false),
+                    last_modified: row.last_modified.map(|lm| lm.and_utc()),
+                    created_at: row.created_at.map(|dt| dt.and_utc()).unwrap_or_else(|| Utc::now()),
+                });
+            }
         }
 
         Ok(events)

@@ -5,6 +5,7 @@ use crate::transcription::{
     types::{TranscriptionConfig, TranscriptionChunk, TranscriptionResult, LanguageCode, WhisperModel, ProcessingMode},
 };
 use crate::error::{AppError, Result};
+use crate::storage::database::DatabasePool;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::State;
@@ -139,16 +140,17 @@ impl From<TranscriptionChunk> for TranscriptionChunkDto {
 #[tauri::command]
 pub async fn initialize_transcription_service(
     transcription_state: State<'_, TranscriptionState>,
+    db_pool: State<'_, DatabasePool>,
 ) -> Result<()> {
     info!("Initializing transcription service");
     
-    let service = TranscriptionService::new().await
+    let service = TranscriptionService::new_with_repository(db_pool.inner().clone()).await
         .map_err(|e| AppError::transcription(format!("Failed to initialize transcription service: {}", e)))?;
     
     let mut state = transcription_state.write().await;
     *state = Some(service);
     
-    info!("Transcription service initialized successfully");
+    info!("Transcription service initialized successfully with database integration");
     Ok(())
 }
 

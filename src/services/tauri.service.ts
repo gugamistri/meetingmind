@@ -16,6 +16,7 @@ import {
   AudioLevelEvent,
   AudioStatusEvent,
   AudioDeviceChangeEvent,
+  AudioPermissionStatus,
 } from '../types/audio.types';
 
 export class TauriAudioService {
@@ -163,6 +164,20 @@ export class TauriAudioService {
    */
   async healthCheck(): Promise<{ status: string; components: { audio: string } }> {
     return await invoke('health_check');
+  }
+
+  /**
+   * Check current audio permissions
+   */
+  async checkAudioPermissions(): Promise<AudioPermissionStatus> {
+    return await invoke('check_audio_permissions');
+  }
+
+  /**
+   * Request audio permissions from the system
+   */
+  async requestAudioPermissions(): Promise<AudioPermissionStatus> {
+    return await invoke('request_audio_permissions');
   }
 }
 

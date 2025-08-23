@@ -114,7 +114,10 @@ impl OAuth2Service {
             .exchange_code(AuthorizationCode::new(auth_response.code))
             .set_pkce_verifier(pkce_verifier)
             .request_async(oauth2::reqwest::async_http_client)
-            .await?;
+            .await
+            .map_err(|e| CalendarError::AuthenticationFailed {
+                reason: format!("OAuth2 token exchange failed: {:?}", e),
+            })?;
 
         // Extract token data
         let token_data = TokenData {
@@ -151,7 +154,7 @@ impl OAuth2Service {
         let provider: CalendarProvider = account_row.provider.parse()?;
         let current_tokens = self.decrypt_tokens(&account_row.encrypted_access_token, &account_row.encrypted_refresh_token)?;
 
-        let refresh_token = current_tokens.refresh_token
+        let refresh_token = current_tokens.refresh_token.clone()
             .ok_or_else(|| CalendarError::InvalidToken {
                 reason: "No refresh token available".to_string(),
             })?;
@@ -174,18 +177,21 @@ impl OAuth2Service {
         let token_result = client
             .exchange_refresh_token(&oauth2::RefreshToken::new(refresh_token))
             .request_async(oauth2::reqwest::async_http_client)
-            .await?;
+            .await
+            .map_err(|e| CalendarError::AuthenticationFailed {
+                reason: format!("OAuth2 token refresh failed: {:?}", e),
+            })?;
 
         let new_token_data = TokenData {
             access_token: token_result.access_token().secret().clone(),
             refresh_token: token_result.refresh_token().map(|t| t.secret().clone())
-                .or(current_tokens.refresh_token), // Keep existing refresh token if new one not provided
+                .or(current_tokens.refresh_token.clone()), // Keep existing refresh token if new one not provided
             expires_at: token_result.expires_in().map(|expires_in| {
                 chrono::Utc::now() + chrono::Duration::seconds(expires_in.as_secs() as i64)
             }),
             scopes: token_result.scopes()
                 .map(|scopes| scopes.iter().map(|s| s.to_string()).collect())
-                .unwrap_or(current_tokens.scopes),
+                .unwrap_or(current_tokens.scopes.clone()),
         };
 
         // Update stored tokens

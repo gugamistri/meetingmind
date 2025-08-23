@@ -9,6 +9,8 @@ use crate::transcription::types::{
     TranscriptionResult,
 };
 use crate::transcription::whisper::WhisperProcessor;
+use crate::storage::repositories::transcription::TranscriptionRepository;
+use crate::storage::models::CreateTranscription;
 
 #[cfg(feature = "cloud-apis")]
 use crate::transcription::cloud::CloudProcessor;
@@ -139,11 +141,17 @@ pub struct TranscriptionPipeline {
     
     /// Result sender for real-time streaming
     result_sender: Option<mpsc::UnboundedSender<TranscriptionChunk>>,
+    
+    /// Database repository for persistence
+    repository: Option<TranscriptionRepository>,
 }
 
 impl TranscriptionPipeline {
     /// Create a new transcription pipeline
-    pub async fn new(model_manager: Arc<ModelManager>) -> Result<Self> {
+    pub async fn new(
+        model_manager: Arc<ModelManager>, 
+        repository: Option<TranscriptionRepository>
+    ) -> Result<Self> {
         info!("Initializing transcription pipeline");
         
         let whisper_processor = Arc::new(WhisperProcessor::new(model_manager).await?);
@@ -162,6 +170,7 @@ impl TranscriptionPipeline {
             config: Arc::new(RwLock::new(TranscriptionConfig::default())),
             chunk_status: Arc::new(RwLock::new(HashMap::new())),
             result_sender: None,
+            repository,
         })
     }
 
@@ -446,7 +455,36 @@ impl TranscriptionPipeline {
         let mut sessions = self.sessions.write().await;
         
         if let Some(session) = sessions.get_mut(session_id) {
-            session.add_chunk(chunk);
+            session.add_chunk(chunk.clone());
+            
+            // Save to database if repository is available
+            if let Some(repository) = &self.repository {
+                let create_transcription = CreateTranscription {
+                    chunk_id: chunk.id.to_string(),
+                    meeting_id: 0, // Default to 0, will be set when associated with a meeting
+                    session_id: session_id.to_string(),
+                    content: chunk.text.clone(),
+                    confidence: chunk.confidence as f64,
+                    language: chunk.language.to_string(),
+                    model_used: chunk.model_used.clone(),
+                    start_timestamp: chunk.start_time.as_secs_f64(),
+                    end_timestamp: chunk.end_time.as_secs_f64(),
+                    word_count: chunk.word_count as i64,
+                    processing_time_ms: chunk.processing_time_ms as i64,
+                    processed_locally: chunk.processed_locally,
+                };
+                
+                match repository.save_transcription(create_transcription).await {
+                    Ok(_) => {
+                        info!("Saved transcription chunk to database: {}", chunk.id);
+                    }
+                    Err(e) => {
+                        error!("Failed to save transcription to database: {}", e);
+                        // Don't fail the operation, just log the error
+                    }
+                }
+            }
+            
             Ok(())
         } else {
             Err(TranscriptionError::SessionNotFound {

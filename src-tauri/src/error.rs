@@ -301,6 +301,36 @@ impl From<std::io::Error> for Error {
     }
 }
 
+/// Convert from std::num::ParseIntError to Error
+impl From<std::num::ParseIntError> for Error {
+    fn from(err: std::num::ParseIntError) -> Self {
+        Self::Internal {
+            message: format!("Parse integer error: {}", err),
+            source: Some(Box::new(err)),
+        }
+    }
+}
+
+/// Convert from serde_json::Error to Error  
+impl From<serde_json::Error> for Error {
+    fn from(err: serde_json::Error) -> Self {
+        Self::Internal {
+            message: format!("JSON serialization error: {}", err),
+            source: Some(Box::new(err)),
+        }
+    }
+}
+
+/// Convert from CalendarError to Error
+impl From<crate::integrations::calendar::types::CalendarError> for Error {
+    fn from(err: crate::integrations::calendar::types::CalendarError) -> Self {
+        Self::Internal {
+            message: format!("Calendar error: {}", err),
+            source: Some(Box::new(err)),
+        }
+    }
+}
+
 /// Result type alias using comprehensive Error type
 pub type Result<T> = std::result::Result<T, Error>;
 

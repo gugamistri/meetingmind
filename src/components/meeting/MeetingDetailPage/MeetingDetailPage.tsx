@@ -1,10 +1,14 @@
 import React, { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { invoke } from '@tauri-apps/api/tauri';
 import { useMeetingDetail } from '@/hooks/meeting/useMeetingDetail';
 import { formatMeetingDuration, getMeetingStatusColor } from '@/types/meeting.types';
 import { Card } from '@/components/common/Card';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
+import { TranscriptionEditor } from '@/components/meeting/TranscriptionEditor';
+import { SummaryGenerator } from '@/components/meeting/SummaryGenerator';
+import { ExportManager } from '@/components/meeting/ExportManager';
 
 // Navigation breadcrumbs component
 const Breadcrumbs: React.FC<{ meetingTitle?: string; onBack: () => void }> = ({ meetingTitle, onBack }) => {
@@ -34,10 +38,12 @@ const MeetingHeader: React.FC<{
   onDelete: () => void;
   onDuplicate: () => void;
   onExport: () => void;
-}> = ({ meeting, onEdit, onDelete, onDuplicate, onExport }) => {
+  onArchive: (archived: boolean) => void;
+}> = ({ meeting, onEdit, onDelete, onDuplicate, onExport, onArchive }) => {
   const statusColor = getMeetingStatusColor(meeting.status);
   const duration = meeting.duration ? formatMeetingDuration(meeting.duration) : 'In progress';
   const participantCount = meeting.participants?.length || 0;
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   return (
     <Card className="mb-6">
@@ -119,6 +125,7 @@ const MeetingHeader: React.FC<{
             
             <div className="relative">
               <button
+                onClick={() => setShowMoreMenu(!showMoreMenu)}
                 className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
               >
                 More
@@ -127,7 +134,62 @@ const MeetingHeader: React.FC<{
                 </svg>
               </button>
               
-              {/* TODO: Add dropdown menu for duplicate, archive, delete actions */}
+              {/* Dropdown menu */}
+              {showMoreMenu && (
+                <>
+                  {/* Backdrop to close menu */}
+                  <div 
+                    className="fixed inset-0 z-10"
+                    onClick={() => setShowMoreMenu(false)}
+                  />
+                  
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200">
+                    <div className="py-1">
+                      <button
+                        onClick={() => {
+                          onDuplicate();
+                          setShowMoreMenu(false);
+                        }}
+                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        <svg className="w-4 h-4 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        Duplicate Meeting
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          const isArchived = meeting.status === 'archived';
+                          onArchive(!isArchived);
+                          setShowMoreMenu(false);
+                        }}
+                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        <svg className="w-4 h-4 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8l6 6 6-6" />
+                        </svg>
+                        {meeting.status === 'archived' ? 'Unarchive' : 'Archive'} Meeting
+                      </button>
+                      
+                      <hr className="my-1" />
+                      
+                      <button
+                        onClick={() => {
+                          onDelete();
+                          setShowMoreMenu(false);
+                        }}
+                        className="flex items-center w-full px-4 py-2 text-sm text-red-700 hover:bg-red-50"
+                      >
+                        <svg className="w-4 h-4 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        Delete Meeting
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -230,60 +292,25 @@ const OverviewContent: React.FC<{ meeting: any }> = ({ meeting }) => {
   );
 };
 
-// Placeholder components for other tabs
-const TranscriptionContent: React.FC = () => {
-  return (
-    <Card className="p-6">
-      <div className="text-center py-8">
-        <svg className="w-12 h-12 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">Transcription Editor</h3>
-        <p className="text-gray-600">
-          Transcription editing functionality will be implemented in the next task.
-        </p>
-      </div>
-    </Card>
-  );
+// Transcription content with full editing capabilities
+const TranscriptionContent: React.FC<{ meetingId: number }> = ({ meetingId }) => {
+  return <TranscriptionEditor meetingId={meetingId} />;
 };
 
-const SummaryContent: React.FC<{ summaries?: any[] }> = ({ summaries = [] }) => {
+const SummaryContent: React.FC<{ meeting: any; onSummaryUpdate?: () => void }> = ({ 
+  meeting, 
+  onSummaryUpdate 
+}) => {
+  // Get transcription content for the AI generator
+  const transcriptionContent = meeting.transcriptions?.[0]?.content || '';
+  
   return (
-    <Card className="p-6">
-      {summaries.length > 0 ? (
-        <div className="space-y-4">
-          {summaries.map((summary) => (
-            <div key={summary.id} className="border-b border-gray-200 pb-4 last:border-b-0">
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="font-medium text-gray-900">{summary.templateName}</h4>
-                <span className="text-xs text-gray-500">
-                  {new Date(summary.createdAt).toLocaleString()}
-                </span>
-              </div>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{summary.content}</p>
-              <div className="mt-2 flex items-center space-x-4 text-xs text-gray-500">
-                <span>Model: {summary.modelUsed}</span>
-                <span>Provider: {summary.provider}</span>
-                {summary.costUsd && <span>Cost: ${summary.costUsd.toFixed(4)}</span>}
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-8">
-          <svg className="w-12 h-12 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-          </svg>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">No AI Summary</h3>
-          <p className="text-gray-600 mb-4">
-            This meeting doesn't have an AI-generated summary yet.
-          </p>
-          <button className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700">
-            Generate Summary
-          </button>
-        </div>
-      )}
-    </Card>
+    <SummaryGenerator
+      meetingId={meeting.id}
+      existingSummaries={meeting.summaries || []}
+      transcriptionContent={transcriptionContent}
+      onSummaryGenerated={onSummaryUpdate}
+    />
   );
 };
 
@@ -309,6 +336,9 @@ const MeetingDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showExportManager, setShowExportManager] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const meetingId = id ? parseInt(id, 10) : 0;
   const { meeting, isLoading, error, refetch } = useMeetingDetail(meetingId);
@@ -329,19 +359,61 @@ const MeetingDetailPage: React.FC = () => {
   }, [meeting?.id]);
 
   const handleDelete = useCallback(() => {
-    // TODO: Implement delete functionality with confirmation
-    console.log('Delete meeting', meeting?.id);
-  }, [meeting?.id]);
+    setShowDeleteConfirm(true);
+  }, []);
 
-  const handleDuplicate = useCallback(() => {
-    // TODO: Implement duplicate functionality
-    console.log('Duplicate meeting', meeting?.id);
-  }, [meeting?.id]);
+  const confirmDelete = useCallback(async () => {
+    if (!meeting || isProcessing) return;
+
+    setIsProcessing(true);
+    try {
+      await invoke('delete_meeting', { meetingId: meeting.id });
+      navigate('/', { replace: true });
+    } catch (err) {
+      console.error('Failed to delete meeting:', err);
+      alert('Failed to delete meeting. Please try again.');
+    } finally {
+      setIsProcessing(false);
+      setShowDeleteConfirm(false);
+    }
+  }, [meeting, navigate, isProcessing]);
+
+  const handleDuplicate = useCallback(async () => {
+    if (!meeting || isProcessing) return;
+
+    setIsProcessing(true);
+    try {
+      const duplicatedMeeting = await invoke('duplicate_meeting', { meetingId: meeting.id });
+      console.log('Meeting duplicated successfully:', duplicatedMeeting);
+      // Optionally navigate to the new meeting or show success message
+      alert('Meeting duplicated successfully!');
+    } catch (err) {
+      console.error('Failed to duplicate meeting:', err);
+      alert('Failed to duplicate meeting. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [meeting, isProcessing]);
+
+  const handleArchive = useCallback(async (archived: boolean) => {
+    if (!meeting || isProcessing) return;
+
+    setIsProcessing(true);
+    try {
+      await invoke('archive_meeting', { meetingId: meeting.id, archived });
+      console.log(`Meeting ${archived ? 'archived' : 'unarchived'} successfully`);
+      await refetch(); // Refresh meeting data to show updated status
+    } catch (err) {
+      console.error(`Failed to ${archived ? 'archive' : 'unarchive'} meeting:`, err);
+      alert(`Failed to ${archived ? 'archive' : 'unarchive'} meeting. Please try again.`);
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [meeting, refetch, isProcessing]);
 
   const handleExport = useCallback(() => {
-    // TODO: Implement export functionality
-    console.log('Export meeting', meeting?.id);
-  }, [meeting?.id]);
+    setShowExportManager(true);
+  }, []);
 
   // Handle keyboard navigation
   React.useEffect(() => {
@@ -426,6 +498,7 @@ const MeetingDetailPage: React.FC = () => {
             onDelete={handleDelete}
             onDuplicate={handleDuplicate}
             onExport={handleExport}
+            onArchive={handleArchive}
           />
 
           <ContentTabs
@@ -437,10 +510,58 @@ const MeetingDetailPage: React.FC = () => {
 
           <div className="mt-6">
             {activeTab === 'overview' && <OverviewContent meeting={meeting} />}
-            {activeTab === 'transcription' && <TranscriptionContent />}
-            {activeTab === 'summary' && <SummaryContent summaries={meeting.summaries} />}
+            {activeTab === 'transcription' && <TranscriptionContent meetingId={meeting.id} />}
+            {activeTab === 'summary' && <SummaryContent meeting={meeting} onSummaryUpdate={refetch} />}
             {activeTab === 'insights' && <InsightsContent />}
           </div>
+
+          {/* Delete Confirmation Dialog */}
+          {showDeleteConfirm && (
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+              <Card className="w-full max-w-md">
+                <div className="p-6">
+                  <div className="flex items-center mb-4">
+                    <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mr-4">
+                      <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900">Delete Meeting</h3>
+                  </div>
+                  
+                  <p className="text-gray-600 mb-6">
+                    Are you sure you want to delete "{meeting?.title}"? This action cannot be undone. All transcriptions, summaries, and associated data will be permanently deleted.
+                  </p>
+                  
+                  <div className="flex space-x-3">
+                    <button
+                      onClick={confirmDelete}
+                      disabled={isProcessing}
+                      className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isProcessing ? 'Deleting...' : 'Delete Meeting'}
+                    </button>
+                    <button
+                      onClick={() => setShowDeleteConfirm(false)}
+                      disabled={isProcessing}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          )}
+
+          {/* Export Manager Modal */}
+          {meeting && (
+            <ExportManager
+              meeting={meeting}
+              isOpen={showExportManager}
+              onClose={() => setShowExportManager(false)}
+            />
+          )}
         </div>
       </div>
     </ErrorBoundary>

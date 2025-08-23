@@ -85,13 +85,13 @@ impl UsageRepository {
         let mut usage_records = Vec::new();
         for record in records {
             let provider = AIProvider::OpenAI; // Default, will be corrected below
-            let provider = match record.service_provider.as_deref().unwrap_or("openai") {
+            let provider = match record.service_provider.as_str() {
                 "openai" => AIProvider::OpenAI,
                 "claude" => AIProvider::Claude,
                 _ => provider,
             };
             
-            let operation_type = match record.operation_type.as_deref().unwrap_or("summarization") {
+            let operation_type = match record.operation_type.as_str() {
                 "summarization" => OperationType::Summarization,
                 "transcription" => OperationType::Transcription,
                 "insight_generation" => OperationType::InsightGeneration,
@@ -108,7 +108,7 @@ impl UsageRepository {
             
             usage_records.push(UsageRecord {
                 id: record.id.unwrap_or(0),
-                service_provider: provider,
+                service_provider: provider.clone(),
                 operation_type,
                 model_name: record.model_name,
                 input_tokens: record.input_tokens.map(|t| t as u32),
@@ -131,6 +131,7 @@ impl UsageRepository {
     ) -> Result<Vec<UsageRecord>> {
         let start_datetime = start_date.and_hms_opt(0, 0, 0).unwrap();
         let end_datetime = end_date.and_hms_opt(23, 59, 59).unwrap();
+        let provider_str = provider.as_str();
         
         let records = sqlx::query!(
             r#"
@@ -142,7 +143,7 @@ impl UsageRepository {
               AND DATE(created_at) BETWEEN DATE(?) AND DATE(?)
             ORDER BY created_at DESC
             "#,
-            provider.as_str(),
+            provider_str,
             start_datetime,
             end_datetime
         )
@@ -155,7 +156,7 @@ impl UsageRepository {
         
         let mut usage_records = Vec::new();
         for record in records {
-            let operation_type = match record.operation_type.as_deref().unwrap_or("summarization") {
+            let operation_type = match record.operation_type.as_str() {
                 "summarization" => OperationType::Summarization,
                 "transcription" => OperationType::Transcription,
                 "insight_generation" => OperationType::InsightGeneration,
@@ -172,7 +173,7 @@ impl UsageRepository {
             
             usage_records.push(UsageRecord {
                 id: record.id.unwrap_or(0),
-                service_provider: provider,
+                service_provider: provider.clone(),
                 operation_type,
                 model_name: record.model_name,
                 input_tokens: record.input_tokens.map(|t| t as u32),
@@ -281,6 +282,7 @@ impl UsageRepository {
         meeting_id: Uuid,
         limit: u32,
     ) -> Result<Vec<UsageRecord>> {
+        let meeting_id_str = meeting_id.to_string();
         let records = sqlx::query!(
             r#"
             SELECT id, service_provider, operation_type, model_name,
@@ -291,7 +293,7 @@ impl UsageRepository {
             ORDER BY created_at DESC
             LIMIT ?
             "#,
-            meeting_id.to_string(),
+            meeting_id_str,
             limit
         )
         .fetch_all(&self.pool)
@@ -303,13 +305,13 @@ impl UsageRepository {
         
         let mut usage_records = Vec::new();
         for record in records {
-            let provider = match record.service_provider.as_deref().unwrap_or("openai") {
+            let provider = match record.service_provider.as_str() {
                 "openai" => AIProvider::OpenAI,
                 "claude" => AIProvider::Claude,
                 _ => continue,
             };
             
-            let operation_type = match record.operation_type.as_deref().unwrap_or("summarization") {
+            let operation_type = match record.operation_type.as_str() {
                 "summarization" => OperationType::Summarization,
                 "transcription" => OperationType::Transcription,
                 "insight_generation" => OperationType::InsightGeneration,
@@ -326,7 +328,7 @@ impl UsageRepository {
             
             usage_records.push(UsageRecord {
                 id: record.id.unwrap_or(0),
-                service_provider: provider,
+                service_provider: provider.clone(),
                 operation_type,
                 model_name: record.model_name,
                 input_tokens: record.input_tokens.map(|t| t as u32),

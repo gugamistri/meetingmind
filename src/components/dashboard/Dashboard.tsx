@@ -156,10 +156,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ className }) => {
                   </Button>
                 )}
               </div>
-              
-              <p className="text-sm text-gray-500 mt-4">
-                Press <kbd className="px-2 py-1 bg-white rounded border text-xs">Space</kbd> to toggle recording
-              </p>
             </div>
           </Card>
         </div>

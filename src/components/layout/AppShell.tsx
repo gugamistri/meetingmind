@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ErrorBoundary } from '../common/ErrorBoundary';
+import { useAudioStore } from '../../stores/audio.store';
 import clsx from 'clsx';
 
 interface AppShellProps {
@@ -62,6 +63,22 @@ const navigation: NavigationItem[] = [
 export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const { initializeAudio } = useAudioStore();
+
+  // Initialize audio service on app startup
+  useEffect(() => {
+    const initAudio = async () => {
+      try {
+        await initializeAudio();
+        console.info('Audio service initialized successfully on app startup');
+      } catch (error) {
+        console.warn('Audio initialization failed on startup (will retry when needed):', error);
+        // Don't throw error here - audio can be initialized later when needed
+      }
+    };
+
+    initAudio();
+  }, [initializeAudio]);
 
   const isActiveRoute = (href: string) => {
     if (href === '/') {

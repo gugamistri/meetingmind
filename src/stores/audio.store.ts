@@ -108,7 +108,31 @@ export const useAudioStore = create<AudioStore>()(
           config,
           isInitialized: true,
           error: null,
+          hasError: false,
         });
+        
+        // After successful initialization, check permissions
+        try {
+          const permissionStatus = await tauriAudioService.checkAudioPermissions();
+          
+          if (!permissionStatus.microphoneAllowed) {
+            set({
+              error: permissionStatus.permissionMessage || 'Microphone access required. Please grant permissions in System Settings.',
+              hasError: true,
+            });
+            console.warn('Audio permissions not granted:', permissionStatus.permissionMessage);
+          } else {
+            // Clear any previous errors if permissions are good
+            set({
+              error: null,
+              hasError: false,
+            });
+            console.info('Audio permissions verified');
+          }
+        } catch (permError) {
+          console.warn('Permission check failed after initialization:', permError);
+          // Don't set error here - let users try to record and handle permission request then
+        }
         
         console.info('Audio service initialized successfully');
       } catch (error) {
@@ -143,6 +167,33 @@ export const useAudioStore = create<AudioStore>()(
           recordingDuration: 0,
         });
         
+        // FIRST: Check audio permissions before attempting to start recording
+        console.info('Checking audio permissions before starting recording');
+        const permissionStatus = await tauriAudioService.checkAudioPermissions();
+        
+        if (!permissionStatus.microphoneAllowed || permissionStatus.needsPermissionRequest) {
+          console.warn('Audio permissions not granted, requesting permissions');
+          
+          // Attempt to request permissions
+          const requestResult = await tauriAudioService.requestAudioPermissions();
+          
+          if (!requestResult.microphoneAllowed || requestResult.needsPermissionRequest) {
+            const errorMessage = requestResult.permissionMessage || 
+              'Microphone access is required to start recording. Please grant microphone permissions in your system settings and try again.';
+            
+            set({ 
+              error: errorMessage,
+              hasError: true,
+              isStarting: false,
+            });
+            
+            console.error('Audio permissions denied:', errorMessage);
+            throw new Error(errorMessage);
+          }
+        }
+        
+        console.info('Audio permissions verified, proceeding with recording');
+        
         const request: StartCaptureRequest = {
           ...(deviceName ? { device_name: deviceName } : {}),
           config: config || state.config,
@@ -155,10 +206,20 @@ export const useAudioStore = create<AudioStore>()(
           set({ config });
         }
         
+        // Manually update state to recording since the backend call succeeded
+        set({
+          isRecording: true,
+          isStarting: false,
+          hasError: false,
+          error: null,
+        });
+        
         console.info('Audio recording started');
       } catch (error) {
         const errorMessage = error instanceof TauriServiceError 
           ? error.message 
+          : error instanceof Error
+          ? error.message
           : 'Failed to start recording';
         
         set({ 
@@ -188,6 +249,14 @@ export const useAudioStore = create<AudioStore>()(
         });
         
         await tauriAudioService.stopAudioCapture();
+        
+        // Manually update state to stopped since the backend call succeeded
+        set({
+          isRecording: false,
+          isStopping: false,
+          hasError: false,
+          error: null,
+        });
         
         console.info('Audio recording stopped');
       } catch (error) {

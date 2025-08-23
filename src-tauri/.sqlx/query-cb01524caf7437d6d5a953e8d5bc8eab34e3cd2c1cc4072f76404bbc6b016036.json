@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n            SELECT id, meeting_id, template_id, content, model_used, provider,\n                   cost_usd, processing_time_ms, token_count, confidence_score,\n                   created_at\n            FROM summaries\n            WHERE id = ?\n            ",
+  "query": "\n            SELECT id, meeting_id, template_id, content, model_used, provider,\n                   cost_usd, processing_time_ms, token_count, confidence_score,\n                   created_at, updated_at\n            FROM summaries \n            WHERE id = ?\n            ",
   "describe": {
     "columns": [
       {
@@ -57,6 +57,11 @@
         "name": "created_at",
         "ordinal": 10,
         "type_info": "Datetime"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 11,
+        "type_info": "Datetime"
       }
     ],
     "parameters": {
@@ -73,8 +78,9 @@
       false,
       true,
       true,
+      true,
       true
     ]
   },
-  "hash": "28b0072394959951ddbc931df32d6fcc020575eea36b40d1702047389d4f24e3"
+  "hash": "cb01524caf7437d6d5a953e8d5bc8eab34e3cd2c1cc4072f76404bbc6b016036"
 }

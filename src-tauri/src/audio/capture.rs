@@ -5,11 +5,13 @@ use std::time::Instant;
 use cpal::{Device, Stream, traits::{DeviceTrait, StreamTrait}};
 use tokio::sync::{mpsc, broadcast};
 use tracing::{debug, info, warn, error, instrument};
+use uuid;
 
 use super::types::{
     AudioBuffer, AudioConfig, AudioError, AudioResult, AudioCaptureStatus, 
     AudioLevelMonitor, AudioStats
 };
+use crate::transcription::TranscriptionService;
 
 /// Unsafe wrapper to make Stream Send + Sync
 /// WARNING: This is potentially unsafe and should only be used in single-threaded contexts
@@ -40,6 +42,13 @@ pub struct AudioCaptureService {
     // Statistics and monitoring
     stats: Arc<RwLock<AudioStats>>,
     start_time: Arc<RwLock<Option<Instant>>>,
+    
+    // Session tracking
+    current_session_id: Arc<RwLock<String>>,
+    
+    // Transcription integration
+    transcription_service: Option<Arc<TranscriptionService>>,
+    transcription_enabled: bool,
 }
 
 impl AudioCaptureService {
@@ -64,7 +73,23 @@ impl AudioCaptureService {
             config: AudioConfig::default(),
             stats: Arc::new(RwLock::new(AudioStats::default())),
             start_time: Arc::new(RwLock::new(None)),
+            current_session_id: Arc::new(RwLock::new(uuid::Uuid::new_v4().to_string())),
+            transcription_service: None,
+            transcription_enabled: false,
         })
+    }
+    
+    /// Set transcription service and enable transcription
+    pub fn set_transcription_service(&mut self, service: Arc<TranscriptionService>) {
+        info!("Transcription service attached to audio capture");
+        self.transcription_service = Some(service);
+        self.transcription_enabled = true;
+    }
+    
+    /// Enable or disable transcription
+    pub fn set_transcription_enabled(&mut self, enabled: bool) {
+        self.transcription_enabled = enabled;
+        info!("Transcription {} for audio capture", if enabled { "enabled" } else { "disabled" });
     }
     
     /// Create audio capture service with custom configuration
@@ -84,6 +109,26 @@ impl AudioCaptureService {
         if self.is_running.load(Ordering::Relaxed) {
             warn!("Audio capture already running");
             return Err(AudioError::AlreadyRunning);
+        }
+        
+        // Generate new session ID for this recording
+        let session_id = uuid::Uuid::new_v4().to_string();
+        *self.current_session_id.write().unwrap() = session_id.clone();
+        info!("Started new audio capture session: {}", session_id);
+        
+        // Start transcription session if enabled
+        if self.transcription_enabled {
+            if let Some(ref transcription_service) = self.transcription_service {
+                match transcription_service.start_session(&session_id).await {
+                    Ok(()) => {
+                        info!("Transcription session started for session: {}", session_id);
+                    }
+                    Err(e) => {
+                        error!("Failed to start transcription session: {}", e);
+                        // Don't fail audio capture if transcription fails
+                    }
+                }
+            }
         }
         
         // Update status
@@ -114,7 +159,7 @@ impl AudioCaptureService {
         *self.start_time.write().unwrap() = Some(Instant::now());
         self.update_status(AudioCaptureStatus::Running).await?;
         
-        info!("Audio capture started successfully");
+        info!("Audio capture started successfully with session ID: {}", session_id);
         Ok(())
     }
     
@@ -126,6 +171,21 @@ impl AudioCaptureService {
         if !self.is_running.load(Ordering::Relaxed) {
             debug!("Audio capture not running, nothing to stop");
             return Ok(());
+        }
+        
+        // Stop transcription session if enabled
+        if self.transcription_enabled {
+            if let Some(ref transcription_service) = self.transcription_service {
+                match transcription_service.stop_session().await {
+                    Ok(()) => {
+                        info!("Transcription session stopped successfully");
+                    }
+                    Err(e) => {
+                        error!("Failed to stop transcription session: {}", e);
+                        // Continue with audio capture stop even if transcription fails
+                    }
+                }
+            }
         }
         
         // Update status
@@ -303,23 +363,94 @@ impl AudioCaptureService {
     
     /// Spawn audio processing task
     async fn spawn_audio_processor(&self, mut audio_rx: mpsc::UnboundedReceiver<AudioBuffer>) {
-        let ring_buffer = self.ring_buffer.as_ref().unwrap().clone();
+        let _ring_buffer = self.ring_buffer.as_ref().unwrap().clone();
+        let session_id = self.current_session_id.clone();
+        let transcription_service = self.transcription_service.clone();
+        let transcription_enabled = self.transcription_enabled;
         
         tokio::spawn(async move {
-            debug!("Audio processor task started");
+            info!("Audio processor task started with transcription: {}", transcription_enabled);
+            let mut sample_count = 0;
+            let mut total_duration = 0.0;
+            let mut audio_chunk_buffer = Vec::new();
+            const CHUNK_SIZE_SECONDS: f32 = 3.0; // Process transcription every 3 seconds
             
-            while let Some(_audio_buffer) = audio_rx.recv().await {
-                // Here we can add additional audio processing
-                // For now, the ring buffer handles the data
+            while let Some(audio_buffer) = audio_rx.recv().await {
+                sample_count += audio_buffer.samples.len();
+                total_duration += audio_buffer.samples.len() as f64 / audio_buffer.sample_rate as f64;
                 
-                // Could add:
-                // - Noise reduction
-                // - Audio enhancement
-                // - Format conversion
-                // - Streaming to transcription service
+                // Accumulate audio samples for transcription processing
+                audio_chunk_buffer.extend_from_slice(&audio_buffer.samples);
+                
+                // Process transcription when we have enough audio (3 seconds worth)
+                let chunk_size_samples = (CHUNK_SIZE_SECONDS * audio_buffer.sample_rate as f32) as usize;
+                
+                if audio_chunk_buffer.len() >= chunk_size_samples && transcription_enabled {
+                    if let Some(ref service) = transcription_service {
+                        // Extract chunk for transcription
+                        let chunk_data: Vec<f32> = audio_chunk_buffer.drain(..chunk_size_samples).collect();
+                        
+                        // Process transcription asynchronously
+                        let service_clone = service.clone();
+                        let chunk_sample_rate = audio_buffer.sample_rate;
+                        tokio::spawn(async move {
+                            match service_clone.process_audio_chunk(&chunk_data, chunk_sample_rate).await {
+                                Ok(transcription_chunks) => {
+                                    for chunk in transcription_chunks {
+                                        info!(
+                                            "Transcription: \"{}\" (confidence: {:.2})", 
+                                            chunk.text.trim(), 
+                                            chunk.confidence
+                                        );
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("Transcription processing error: {}", e);
+                                }
+                            }
+                        });
+                    }
+                }
+                
+                // Log audio processing progress every 5 seconds of audio
+                if (sample_count % (5 * audio_buffer.sample_rate as usize)) < audio_buffer.samples.len() {
+                    info!(
+                        "Audio processing: {} samples captured, {:.1}s total duration, session: {}", 
+                        sample_count, total_duration, session_id.read().unwrap()
+                    );
+                }
+                
+                // TODO: Add audio file writing
+                // - Create WAV file for the session
+                // - Write audio chunks to file
+                // - Update database with recording metadata
             }
             
-            debug!("Audio processor task ended");
+            // Process any remaining audio for transcription
+            if !audio_chunk_buffer.is_empty() && transcription_enabled {
+                if let Some(ref service) = transcription_service {
+                    let final_chunk = audio_chunk_buffer.clone();
+                    let service_clone = service.clone();
+                    tokio::spawn(async move {
+                        match service_clone.process_audio_chunk(&final_chunk, 16000).await {
+                            Ok(transcription_chunks) => {
+                                for chunk in transcription_chunks {
+                                    info!(
+                                        "Final transcription: \"{}\" (confidence: {:.2})", 
+                                        chunk.text.trim(), 
+                                        chunk.confidence
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                error!("Final transcription processing error: {}", e);
+                            }
+                        }
+                    });
+                }
+            }
+            
+            info!("Audio processor task ended - captured {} samples, {:.1}s total", sample_count, total_duration);
         });
     }
     
@@ -427,12 +558,25 @@ impl AudioCaptureService {
         if was_running {
             self.setup_audio_stream(&device).await?;
             
-            if let Ok(stream_guard) = self.current_stream.read() {
-                if let Some(ref stream) = stream_guard.0 {
-                    stream.play().map_err(AudioError::PlayStream)?;
-                    self.is_running.store(true, Ordering::Relaxed);
-                    self.update_status(AudioCaptureStatus::Running).await?;
+            // Check if stream exists and start it without holding the guard across await
+            let should_start = {
+                if let Ok(stream_guard) = self.current_stream.read() {
+                    stream_guard.0.is_some()
+                } else {
+                    false
                 }
+            };
+            
+            if should_start {
+                // Start the stream without holding the lock
+                if let Ok(stream_guard) = self.current_stream.read() {
+                    if let Some(ref stream) = stream_guard.0 {
+                        stream.play().map_err(AudioError::PlayStream)?;
+                        self.is_running.store(true, Ordering::Relaxed);
+                    }
+                }
+                // Update status after releasing the lock
+                self.update_status(AudioCaptureStatus::Running).await?;
             }
         }
         

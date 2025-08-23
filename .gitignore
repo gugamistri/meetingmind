@@ -38,3 +38,10 @@ coverage/
 
 # OS generated files
 Thumbs.db
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+meeting-mind.db*
+src-tauri/meeting-mind.db*

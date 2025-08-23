@@ -30,7 +30,15 @@ export const AudioControls: React.FC<AudioControlsProps> = ({
 }) => {
   const { isRecording, isStarting, isStopping, hasError } = useAudioStatus();
   const error = useAudioError();
-  const { startRecording, stopRecording, clearError } = useAudioStore();
+  const { startRecording, stopRecording, clearError, initializeAudio } = useAudioStore();
+
+  // Check if error is related to permissions
+  const isPermissionError = error && (
+    error.includes('permission') || 
+    error.includes('Permission') ||
+    error.includes('System Settings') ||
+    error.includes('grant')
+  );
 
   // Handle recording start
   const handleStartRecording = useCallback(async () => {
@@ -55,6 +63,25 @@ export const AudioControls: React.FC<AudioControlsProps> = ({
       onError?.(errorMessage);
     }
   }, [stopRecording, onRecordingStop, onError, clearError]);
+
+  // Handle permission request
+  const handleRequestPermissions = useCallback(async () => {
+    try {
+      clearError();
+      console.info('Requesting audio permissions...');
+      
+      // Re-initialize audio service which will check permissions
+      await initializeAudio();
+      
+      console.info('Permission request completed, attempting to start recording');
+      // After permission grant, try to start recording
+      await handleStartRecording();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to request permissions';
+      onError?.(errorMessage);
+      console.error('Permission request failed:', err);
+    }
+  }, [clearError, initializeAudio, handleStartRecording, onError]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -96,7 +123,12 @@ export const AudioControls: React.FC<AudioControlsProps> = ({
 
   // Status text
   const getStatusText = () => {
-    if (hasError && error) return `Error: ${error}`;
+    if (hasError && error) {
+      if (isPermissionError) {
+        return 'Microphone access required';
+      }
+      return `Error: ${error}`;
+    }
     if (isStarting) return 'Starting recording...';
     if (isStopping) return 'Stopping recording...';
     if (isRecording) return 'Recording active';
@@ -105,7 +137,12 @@ export const AudioControls: React.FC<AudioControlsProps> = ({
 
   // Status color
   const getStatusColor = () => {
-    if (hasError) return 'text-red-600';
+    if (hasError) {
+      if (isPermissionError) {
+        return 'text-blue-600'; // Use blue for permission requests
+      }
+      return 'text-red-600';
+    }
     if (isStarting || isStopping) return 'text-yellow-600';
     if (isRecording) return 'text-green-600';
     return 'text-gray-600';
@@ -136,12 +173,32 @@ export const AudioControls: React.FC<AudioControlsProps> = ({
             )}
             <span>Stop Recording</span>
           </Button>
+        ) : isPermissionError ? (
+          <Button
+            variant="secondary"
+            size={size}
+            onClick={handleRequestPermissions}
+            disabled={isStarting}
+            className={clsx(
+              sizeClasses[size],
+              'flex items-center space-x-2 transition-all duration-200',
+              'hover:shadow-lg focus:ring-blue-500 border-blue-200 text-blue-700 hover:bg-blue-50'
+            )}
+            aria-label="Request microphone permissions"
+          >
+            {isStarting ? (
+              <LoadingSpinner className={iconSizes[size]} />
+            ) : (
+              <PermissionIcon className={iconSizes[size]} />
+            )}
+            <span>Grant Microphone Access</span>
+          </Button>
         ) : (
           <Button
             variant="primary"
             size={size}
             onClick={handleStartRecording}
-            disabled={isStarting || hasError}
+            disabled={isStarting || (hasError && !isPermissionError)}
             className={clsx(
               sizeClasses[size],
               'flex items-center space-x-2 transition-all duration-200',
@@ -207,6 +264,18 @@ const StopIcon: React.FC<{ className?: string }> = ({ className }) => (
     aria-hidden="true"
   >
     <rect x="6" y="6" width="12" height="12" rx="2" />
+  </svg>
+);
+
+// Permission icon component
+const PermissionIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg
+    className={className}
+    fill="currentColor"
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+  >
+    <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zM10 17l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
   </svg>
 );
 
