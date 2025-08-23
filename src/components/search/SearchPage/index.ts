@@ -1,0 +1,1 @@
+export { SearchPage, type SearchPageProps } from './SearchPage';

@@ -1,0 +1,1 @@
+export { GlobalSearchBar, type GlobalSearchBarProps } from './GlobalSearchBar';
